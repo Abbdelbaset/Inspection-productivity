@@ -1536,8 +1536,13 @@ function bootstrap() {
       description: existingRegionById[f.properties.id]?.description || ''
     }));
 
-    // Load employees
-    if (storedEmployees && storedEmployees.length && !cacheIsStale) {
+    // Load employees. storedEmployees is `null` only when the key was
+    // never saved before (first run). If it's an array — even an empty
+    // one, e.g. the person deleted every employee on purpose — that's
+    // real saved state and must be respected, not treated as "no data"
+    // and regenerated. (Previously this checked `.length`, so clearing
+    // the list made the demo employees silently come back on reload.)
+    if (storedEmployees !== null && !cacheIsStale) {
       State.employees = storedEmployees;
     } else {
       State.employees = generateSeedEmployees(State.regions.map(r => r.id));
