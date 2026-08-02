@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPV Arabia - Regional Productivity Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="loading-screen">
+    <div class="mark">CPV<br>ARABIA</div>
+    <div><span class="ldot"></span><span class="ldot"></span><span class="ldot"></span></div>
+    <div class="ltext">Loading Regional Dashboard</div>
+  </div>
+
+  <div id="app">
+    <nav id="nav">
+      <div class="brand">CPV</div>
+      <button class="nav-btn active" data-view="overview" aria-label="Overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <span class="tip">Overview</span>
+      </button>
+      <button class="nav-btn" data-view="employees" aria-label="Employees">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1a4 4 0 100-8 4 4 0 000 8zm6 0a4 4 0 00-.68-7.94M9 20v-2a4 4 0 014-4h1a4 4 0 014 4v2H9z"/></svg>
+        <span class="tip">Employees</span>
+      </button>
+      <button class="nav-btn" data-view="analytics" aria-label="Analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M8 17V9m5 8V5m5 12v-6"/></svg>
+        <span class="tip">Analytics</span>
+      </button>
+      <button class="nav-btn" data-view="admin" aria-label="Admin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.35.68.63.95.28.28.6.5.96.63.36.13.75.18 1.13.15H22a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span class="tip">Admin</span>
+      </button>
+      <div class="spacer"></div>
+      <div class="clock" id="nav-clock">--:--<br>KSA</div>
+    </nav>
+
+    <div id="main">
+      <div id="topbar">
+        <div class="topbar-title-wrap">
+          <h1 id="topbar-title">Overview</h1>
+          <div class="subtitle" id="topbar-subtitle">Live regional performance</div>
+        </div>
+        <div class="ticker"><span class="pulse-dot"></span><span id="ticker-label">Company Productivity</span> <b id="ticker-value">--</b></div>
+        <div class="topbar-spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-export" title="Export employee list to CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export
+        </button>
+        <button class="btn btn-primary btn-sm" id="btn-add-employee">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Add Employee
+        </button>
+      </div>
+
+      <div id="views">
+
+        <!-- OVERVIEW -->
+        <div class="view active" id="view-overview">
+          <div id="kpi-rail"></div>
+          <div id="map-col">
+            <div id="map"></div>
+            <div id="map-toolbar">
+              <div class="map-tool-btn" id="btn-fit" title="Fit to all regions" aria-label="Fit to all regions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+              </div>
+            </div>
+            <div id="map-legend"></div>
+            <div id="region-panel">
+              <button class="close-x rp-close" id="rp-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+              <div class="rp-head">
+                <div class="rp-eyebrow" id="rp-eyebrow">REGION</div>
+                <div class="rp-title" id="rp-title">—</div>
+              </div>
+              <div class="rp-body" id="rp-body"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EMPLOYEES -->
+        <div class="view" id="view-employees">
+          <div class="view-header">
+            <div>
+              <h2>Employee Directory</h2>
+              <p id="emp-count-label">— employees</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input type="text" id="emp-search" placeholder="Search by name or ID…">
+            </div>
+            <select id="emp-filter-region"><option value="">All Regions</option></select>
+            <select id="emp-filter-status">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <select id="emp-filter-tier">
+              <option value="">All Performance</option>
+              <option value="elite">Elite</option>
+              <option value="good">Good</option>
+              <option value="watch">Needs Attention</option>
+              <option value="critical">Critical</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-filters">Clear Filters</button>
+          </div>
+          <div class="toolbar" id="emp-bulk-toolbar" style="display:none;background:var(--sand-soft);border-bottom:1px solid var(--panel-line);">
+            <span id="emp-bulk-count" style="font-size:12.5px;font-weight:700;"></span>
+            <div class="toolbar-spacer"></div>
+            <button class="btn btn-ghost btn-sm" id="btn-bulk-clear">Clear selection</button>
+            <button class="btn btn-sand btn-sm" id="btn-bulk-edit">Edit selected</button>
+            <button class="btn btn-danger btn-sm" id="btn-bulk-delete">Delete selected</button>
+          </div>
+          <div class="table-wrap">
+            <div id="app-error" role="alert">
+              <strong>⚠️ Error:</strong> <span id="app-error-text">Failed to load data</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:34px;"><input type="checkbox" id="emp-select-all" title="Select all"></th>
+                  <th data-sort="name">Employee <span class="arrow"></span></th>
+                  <th data-sort="regionId">Region <span class="arrow"></span></th>
+                  <th data-sort="status">Status <span class="arrow"></span></th>
+                  <th data-sort="productivity">Productivity <span class="arrow"></span></th>
+                  <th data-sort="productivityJul">Jul '26 <span class="arrow"></span></th>
+                  <th data-sort="productivityAvg3m">3-Month Avg <span class="arrow"></span></th>
+                  <th data-sort="visits">Visits <span class="arrow"></span></th>
+                  <th data-sort="completedTasks">Tasks <span class="arrow"></span></th>
+                  <th data-sort="projects">Projects <span class="arrow"></span></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="emp-tbody"></tbody>
+            </table>
+            <div class="pagination" id="emp-pagination"></div>
+          </div>
+        </div>
+
+        <!-- ANALYTICS -->
+        <div class="view" id="view-analytics">
+          <div class="view-header" style="padding:0;">
+            <div>
+              <h2>Business Intelligence</h2>
+              <p>Regional and workforce performance analytics</p>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="chart-card">
+              <h3 id="chart-region-bar-title">Productivity by Region</h3>
+              <div class="sub">Average productivity, ranked</div>
+              <canvas id="chart-region-bar"></canvas>
+            </div>
+            <div class="chart-card">
+              <h3 id="chart-tier-donut-title">Performance Distribution</h3>
+              <div class="sub">Employee tier breakdown · Jul '26</div>
+              <canvas id="chart-tier-donut"></canvas>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="chart-card">
+              <h3 id="chart-top-employees-title">Top 8 Employees</h3>
+              <div class="sub">By productivity score</div>
+              <canvas id="chart-top-employees"></canvas>
+            </div>
+            <div class="chart-card">
+              <h3 id="chart-activity-title">Activity Volume by Region</h3>
+              <div class="sub">Visits vs. completed tasks</div>
+              <canvas id="chart-activity"></canvas>
+            </div>
+          </div>
+          <div class="grid-3" id="analytics-callouts"></div>
+        </div>
+
+        <!-- ADMIN -->
+        <div class="view" id="view-admin">
+          <div class="view-header" style="padding:0;">
+            <div>
+              <h2>Administration</h2>
+              <p>Manage regions, import data, and configure thresholds</p>
+            </div>
+          </div>
+          <div class="admin-tabs">
+            <div class="admin-tab active" data-pane="regions">Regions</div>
+            <div class="admin-tab" data-pane="settings">Settings</div>
+            <div class="admin-tab" data-pane="visibility">Visibility</div>
+            <div class="admin-tab" data-pane="labels">Labels</div>
+            <div class="admin-tab" data-pane="import">Import</div>
+            <div class="admin-tab" data-pane="about">System</div>
+          </div>
+
+          <div class="admin-pane active" id="pane-regions">
+            <p style="font-size:12.5px;color:var(--ink-faint);margin-bottom:14px;">
+              Region boundaries are loaded from <span class="mono">regions.kml</span> on every load.
+              Region names are displayed exactly as they appear in the KML file.
+              To reshape a region's boundary, open it on the Overview map and click "Edit boundary" —
+              your edits are saved and survive future KML re-imports.
+            </p>
+            <div id="region-admin-list"></div>
+          </div>
+
+          <div class="admin-pane" id="pane-settings">
+            <div class="chart-card" style="max-width:520px;">
+              <h3>Productivity Thresholds</h3>
+              <div class="sub">Controls region map coloring and performance tiers</div>
+              <div id="threshold-list"></div>
+              <button class="btn btn-sand btn-sm" id="btn-save-thresholds" style="margin-top:14px;">Save Thresholds</button>
+            </div>
+            <div class="chart-card" style="max-width:520px;margin-top:16px;">
+              <h3>Danger Zone</h3>
+              <div class="sub">Reset all locally stored data</div>
+              <button class="btn btn-danger btn-sm" id="btn-reset-data">Reset All Data</button>
+            </div>
+          </div>
+
+          <div class="admin-pane" id="pane-visibility">
+            <div class="chart-card" style="max-width:520px;">
+              <h3>Dashboard Visibility Controls</h3>
+              <div class="sub">Toggle which sections appear on the Overview page</div>
+              <div id="visibility-controls"></div>
+              <button class="btn btn-sand btn-sm" id="btn-save-visibility" style="margin-top:14px;">Save Visibility Settings</button>
+            </div>
+          </div>
+
+          <div class="admin-pane" id="pane-labels">
+            <div class="chart-card" style="max-width:640px;">
+              <h3>Dashboard Labels</h3>
+              <div class="sub">Rename any title or label shown on the Overview dashboard</div>
+              <div id="label-settings-list" style="margin-top:10px;"></div>
+              <div style="display:flex;gap:8px;margin-top:6px;">
+                <button class="btn btn-sand btn-sm" id="btn-save-labels">Save Labels</button>
+                <button class="btn btn-ghost btn-sm" id="btn-reset-labels">Reset to Defaults</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-pane" id="pane-import">
+            <div class="grid-2" style="margin-top:0;">
+              <div class="import-zone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l6 6h-4v8h-4V8H6l6-6z"/><path d="M4 18v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+                <h4>Preview a Different KML</h4>
+                <p>The map loads boundaries from <span class="mono">regions.kml</span>. Use this to preview another file for this session. You can also drag individual region vertices right on the map — open a region and click "Edit boundary".</p>
+                <input type="file" id="kml-file-input" accept=".kml" class="hidden" aria-label="Choose KML file">
+                <button class="btn btn-primary btn-sm" id="btn-kml-import">Choose KML File</button>
+              </div>
+              <div class="import-zone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
+                <h4>Import Employees (CSV or Excel)</h4>
+                <p>Columns: name, region, status, productivity, productivityJul, productivityAvg3m, visits, completedTasks, projects. Productivity figures are plain numbers you enter — not percentages. Header names are matched flexibly (e.g. "Region" or "July").</p>
+                <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" class="hidden" aria-label="Choose CSV or Excel file">
+                <button class="btn btn-primary btn-sm" id="btn-csv-import">Choose CSV or Excel File</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-pane" id="pane-about">
+            <div class="chart-card" style="max-width:640px;">
+              <h3>Architecture Notes</h3>
+              <div class="sub" style="margin-bottom:12px;">This is the client application layer, ready for a backend replacement.</div>
+              <div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">
+                The data model, region geometry, and settings are stored per-browser and ready to be swapped for real API calls.
+                Employee, region, and settings schemas are stable and additive.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee Modal -->
+  <div class="modal-overlay" id="employee-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="emp-modal-title">Add Employee</h3>
+        <button class="close-x" id="emp-modal-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="f-id">
+        <div class="form-row"><label>Full Name</label><input type="text" id="f-name" placeholder="e.g. John Doe"></div>
+        <div class="form-grid">
+          <div class="form-row"><label>Region</label><select id="f-region"></select></div>
+          <div class="form-row"><label>Status</label>
+            <select id="f-status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row"><label>Productivity</label><input type="number" id="f-productivity" step="any"></div>
+          <div class="form-row"><label>Jul '26 Productivity</label><input type="number" id="f-productivityJul" step="any"></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row"><label>3-Month Avg</label><input type="number" id="f-productivityAvg3m" step="any"></div>
+          <div class="form-row"><label>Visits</label><input type="number" id="f-visits" min="0"></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row"><label>Completed Tasks</label><input type="number" id="f-completedTasks" min="0"></div>
+          <div class="form-row"><label>Active Projects</label><input type="number" id="f-projects" min="0"></div>
+        </div>
+        <div class="form-row"><label>Join Date</label><input type="date" id="f-joinDate"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="emp-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="emp-modal-save">Save Employee</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Edit Modal -->
+  <div class="modal-overlay" id="bulk-edit-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Edit <span id="bulk-edit-count">0</span> Employees</h3>
+        <button class="close-x" id="bulk-edit-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12.5px;color:var(--ink-faint);margin-bottom:14px;">Leave a field as "No change" to keep each employee's existing value for that field. Applies to every selected employee.</p>
+        <div class="form-row"><label>Region</label><select id="bulk-edit-region"><option value="">— No change —</option></select></div>
+        <div class="form-row"><label>Status</label>
+          <select id="bulk-edit-status">
+            <option value="">— No change —</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="form-grid">
+          <div class="form-row"><label>Productivity</label><input type="number" id="bulk-edit-productivity" step="any" placeholder="No change"></div>
+          <div class="form-row"><label>Jul '26 Productivity</label><input type="number" id="bulk-edit-productivityJul" step="any" placeholder="No change"></div>
+        </div>
+        <div class="form-row"><label>3-Month Avg</label><input type="number" id="bulk-edit-productivityAvg3m" step="any" placeholder="No change"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="bulk-edit-cancel">Cancel</button>
+        <button class="btn btn-primary" id="bulk-edit-save">Apply to Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal" style="width:380px;">
+      <div class="modal-head"><h3 id="confirm-title">Are you sure?</h3></div>
+      <div class="modal-body"><p id="confirm-body" style="font-size:13px;color:var(--ink-soft);"></p></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+        <button class="btn btn-danger" id="confirm-ok">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Duplicate Modal -->
+  <div class="modal-overlay" id="import-duplicate-modal">
+    <div class="modal" style="width:460px;">
+      <div class="modal-head"><h3>بيانات مكررة / Duplicate data found</h3></div>
+      <div class="modal-body"><p id="import-duplicate-body" style="font-size:13px;color:var(--ink-soft);line-height:1.7;"></p></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="import-dup-cancel">إلغاء الاستيراد</button>
+        <button class="btn btn-sand" id="import-dup-skip">تجاهل المكرر</button>
+        <button class="btn btn-primary" id="import-dup-replace">استبدال البيانات</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-wrap"></div>
+
+  <!-- ===== LOAD LIBRARIES WITH FALLBACKS ===== -->
+  <script>
+    // Helper to load scripts with multiple fallback sources
+    function loadScriptWithFallback(sources, callback, index) {
+      index = index || 0;
+      if (index >= sources.length) {
+        if (callback) callback(false);
+        return;
+      }
+
+      var script = document.createElement('script');
+      script.src = sources[index];
+      script.async = true;
+
+      script.onload = function() {
+        if (callback) callback(true);
+      };
+
+      script.onerror = function() {
+        console.warn('Failed to load:', sources[index], 'trying next...');
+        loadScriptWithFallback(sources, callback, index + 1);
+      };
+
+      document.head.appendChild(script);
+    }
+
+    // Track loaded libraries
+    var librariesLoaded = {
+      leaflet: false,
+      chart: false,
+      papa: false,
+      xlsx: false
+    };
+
+    // Load Leaflet with fallbacks
+    loadScriptWithFallback([
+      'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+      'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+      'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'
+    ], function(loaded) {
+      librariesLoaded.leaflet = loaded;
+      if (!loaded) {
+        console.warn('Leaflet failed to load. Map will not work.');
+        var errorText = document.getElementById('app-error-text');
+        if (errorText) {
+          errorText.textContent = 'Leaflet failed to load. Map will not work.';
+          document.getElementById('app-error').classList.add('show');
+        }
+      }
+      checkAllLibrariesLoaded();
+    });
+
+    // Load Chart.js with fallbacks
+    loadScriptWithFallback([
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+      'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
+    ], function(loaded) {
+      librariesLoaded.chart = loaded;
+      if (!loaded) {
+        console.warn('Chart.js failed to load. Charts will not render.');
+        var errorText = document.getElementById('app-error-text');
+        if (errorText) {
+          errorText.textContent = 'Chart.js failed to load. Charts will not render.';
+          document.getElementById('app-error').classList.add('show');
+        }
+      }
+      checkAllLibrariesLoaded();
+    });
+
+    // Load PapaParse with fallbacks
+    loadScriptWithFallback([
+      'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js',
+      'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js',
+      'https://unpkg.com/papaparse@5.4.1/papaparse.min.js'
+    ], function(loaded) {
+      librariesLoaded.papa = loaded;
+      if (!loaded) {
+        console.warn('PapaParse failed to load. CSV import will not work.');
+      }
+      checkAllLibrariesLoaded();
+    });
+
+    // Load SheetJS (xlsx) with fallbacks — used for Excel employee imports.
+    // Not required for the app to start; loads in the background.
+    loadScriptWithFallback([
+      'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+      'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+      'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+    ], function(loaded) {
+      librariesLoaded.xlsx = loaded;
+      if (!loaded) {
+        console.warn('SheetJS failed to load. Excel import will not work (CSV import still will).');
+      }
+    });
+
+    // Check if all critical libraries are loaded
+    var appStarted = false;
+
+    function checkAllLibrariesLoaded() {
+      if (appStarted) return;
+
+      var leafletOk = typeof L !== 'undefined' || librariesLoaded.leaflet;
+      var chartOk = typeof Chart !== 'undefined' || librariesLoaded.chart;
+
+      if (leafletOk && chartOk) {
+        appStarted = true;
+        startApp();
+      } else {
+        setTimeout(function() {
+          var leafletOk2 = typeof L !== 'undefined';
+          var chartOk2 = typeof Chart !== 'undefined';
+
+          if (leafletOk2 && chartOk2) {
+            appStarted = true;
+            startApp();
+            return;
+          }
+
+          var missing = [];
+          if (!leafletOk2) missing.push('Leaflet');
+          if (!chartOk2) missing.push('Chart.js');
+
+          if (missing.length) {
+            var errorText = document.getElementById('app-error-text');
+            if (errorText) {
+              errorText.textContent = 'Some libraries failed to load: ' + missing.join(', ') +
+                '. The app may not work correctly. Try refreshing or check your internet connection.';
+              document.getElementById('app-error').classList.add('show');
+            }
+          }
+
+          setTimeout(function() {
+            if (!appStarted) {
+              appStarted = true;
+              startApp();
+            }
+          }, 3000);
+
+        }, 3000);
+      }
+    }
+
+    // Start the app
+    function startApp() {
+      var appScript = document.createElement('script');
+      appScript.src = 'app.js';
+      appScript.onerror = function() {
+        var errorText = document.getElementById('app-error-text');
+        if (errorText) {
+          errorText.textContent = 'Failed to load app.js. Make sure the file exists in the same folder.';
+          document.getElementById('app-error').classList.add('show');
+        }
+      };
+      document.head.appendChild(appScript);
+    }
+
+    // Emergency fallback
+    setTimeout(function() {
+      if (!appStarted) {
+        var errorText = document.getElementById('app-error-text');
+        if (errorText) {
+          errorText.textContent = 'Failed to load required libraries. Please check your internet connection and refresh the page.';
+          document.getElementById('app-error').classList.add('show');
+        }
+        if (!appStarted) {
+          appStarted = true;
+          startApp();
+        }
+      }
+    }, 12000);
+  </script>
+
+</body>
+</html>

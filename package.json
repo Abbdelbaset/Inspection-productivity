@@ -1,0 +1,10 @@
+{
+  "name": "cpv-arabia-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CPV Arabia — Regional Productivity Dashboard",
+  "dependencies": {
+    "@vercel/kv": "^2.0.0"
+  }
+}
