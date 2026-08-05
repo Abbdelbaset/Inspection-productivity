@@ -1,5 +1,26 @@
 # CPV Arabia — Regional Productivity Dashboard
 
+## This update
+
+- **Fixed:** "Map container is already initialized" error when
+  re-importing a KML file.
+- **Chart Builder:** new "Show data labels on chart" option — values
+  now print directly on bars/slices, so a downloaded PNG carries real
+  data, not just an unlabeled picture.
+- **Admin → Regions:** "Hide from map" and "Delete boundary" buttons
+  per region (data/employees are kept either way).
+- **Branding:** Admin → Settings → Branding — upload a company logo
+  and set a company name; the logo now shows in the topbar.
+- **Font:** the whole app now uses Calibri (with a Segoe UI/Candara/
+  Arial fallback stack, since Calibri isn't a web font).
+- **Dark mode:** toggle button in the topbar (sun/moon icon), including
+  a matching dark basemap on the map.
+- **Map labels:** now draggable — pull overlapping labels apart by
+  hand; the new position is remembered.
+- **Map PNG export:** region boundary fill/outline is now hidden in
+  the downloaded image (labels + basemap stay visible), matching what
+  a clean report should look like.
+
 ## Running it
 
 **Locally (quick preview, no cross-device sync):**
@@ -36,6 +57,96 @@ instead of `python3 -m http.server`, which runs `/api/state` locally too.
 ---
 
 ## What changed in this pass (شرح بالعربي تحت كل نقطة)
+
+### -3. Region-only data entry (no employee list required)
+
+Admin → Regions now has a **Totals** button per region that opens a
+small form: employee count, average productivity (Jul), 3-month
+average, total visits, tasks, and projects. Fill this in for a region
+that has zero individual employee records, and the map, KPI rail,
+region panel, and every chart use those numbers automatically — you
+don't need a per-employee roster to get a region onto the dashboard.
+
+CSV/Excel import now recognizes this too: a row with a region but **no
+name** is treated as a region-total row instead of an employee row
+(add an `employeeCount` column for these). A single file can mix both
+— rows with a name become employees, rows without one update that
+region's totals — so you can import full employee-level data for some
+regions and aggregate-only totals for others in one upload.
+
+> إدارة → المناطق فيها زرار "Totals" لكل منطقة، بيفتح فورم صغير:
+> عدد الموظفين، متوسط الإنتاجية (يوليو)، متوسط آخر 3 شهور، الزيارات،
+> المهام، المشاريع. تملأه لمنطقة مفيهاش موظفين مُدخلين، وكل حاجة في
+> الداشبورد (الخريطة، الإحصائيات، الرسوم) هتستخدم الأرقام دي تلقائي —
+> مش لازم تدخل كل موظف لوحده عشان المنطقة تظهر صح. لو رفعت ملف
+> إكسل/CSV وفيه صف بمنطقة من غير اسم موظف، هيتعامل معاه كإجمالي
+> للمنطقة مش كموظف (ضيف عمود employeeCount له).
+
+### -4. Chart Builder — a page to build your own charts
+
+New "Chart Builder" tab (the icon next to Analytics). Pick **Group
+By** (Region or Employee), a **Metric** (total productivity, average,
+employee count, visits, tasks, projects, % share of total...), an
+optional **Compare With** metric for a two-series chart, a **Chart
+Type** (bar, horizontal bar, line, pie, doughnut), and — for
+employee-level charts — a region filter and a "show top N" limit. A
+live preview updates as you change any option; "+ Add Chart" saves it
+below, where it stays (synced like everything else) until you remove
+it. Every saved chart has its own "Download PNG" button.
+
+This is what gives you the flexibility to look at the same data
+either **by region** (totals/averages rolled up) or **by employee**
+(individual rankings) — or both side by side as separate saved charts.
+
+> تبويب جديد "Chart Builder" جنب الأنالتكس. تختار تجميع البيانات
+> (بالمنطقة ولا بالموظف)، المقياس (إجمالي الإنتاجية، المتوسط، عدد
+> الموظفين، نسبة من الإجمالي...)، ومقياس تاني تقارن بيه لو حبيت، ونوع
+> الرسم (أعمدة، خط، دائري...). فيه معاينة حية بتتحدث أول ما تغير أي
+> اختيار، وزرار "+ Add Chart" يحفظ الرسم تحت وهيفضل محفوظ. كل رسم
+> محفوظ له زرار تحميل PNG لوحده. ده اللي بيديك المرونة تشوف نفس
+> البيانات بالمنطقة أو بالموظف أو الاتنين مع بعض كرسومات منفصلة.
+
+### -5. Print the map with region labels, and download charts as PNG
+
+The map toolbar has three new buttons: a label icon (toggles a
+permanent on-map label per region showing employee count, % share of
+total productivity, 3-month average, and July productivity — all four
+numbers you asked for, together), a download icon (exports the map as
+a PNG, via `html2canvas`), and a print icon (opens the browser's print
+dialog with everything except the map hidden, so you can print or
+"save as PDF"). All four analytics charts, and every chart in the
+Chart Builder, also got a "Download PNG" button — each export bakes a
+small title/date header into the image so it drops straight into a
+Word or PowerPoint slide without extra cropping.
+
+`html2canvas` loads the same way the other libraries do (multiple CDN
+mirrors, non-blocking) — if it can't load for some reason, the PNG
+button shows a message pointing you to Print instead, so nothing hangs.
+
+> شريط أدوات الخريطة فيه 3 أزرار جديدة: أيقونة "ليبل" بتظهر/تخفي
+> تسمية ثابتة فوق كل منطقة فيها (عدد الموظفين - نسبة إنتاجية المنطقة
+> من الإجمالي - متوسط آخر 3 شهور - إنتاجية يوليو) زي ما طلبت بالظبط،
+> وأيقونة تحميل بتصدّر الخريطة كصورة PNG، وأيقونة طباعة بتفتح نافذة
+> طباعة المتصفح (تقدر تحفظها PDF من هناك). كل الرسوم البيانية (في
+> صفحة Analytics وصفحة Chart Builder) بقى لها زرار تحميل PNG كمان،
+> وكل صورة بيتحط فيها عنوان وتاريخ صغير فوق عشان تنزلها وتحطها في
+> وورد أو باوربوينت على طول من غير قص.
+
+### -6. Region colors and labels now stay correct with mixed data sources
+
+`computeRegionStats` (used by the map, KPI rail, region panel, and
+every chart) now checks manual region totals whenever a region has no
+employee records, instead of only ever reading from the employee list.
+Company-wide totals/averages and each region's "% share of total
+productivity" were recalculated the same way, so a dashboard that mixes
+employee-level regions and totals-only regions adds up correctly
+everywhere, not just on the map.
+
+> `computeRegionStats` (اللي بتستخدمه الخريطة والإحصائيات ولوحة كل
+> منطقة) بقى يرجع للأرقام اليدوية لو المنطقة مفيهاش موظفين مسجلين،
+> بدل ما يعتمد بس على قائمة الموظفين. إجمالي ومتوسط الشركة، ونسبة كل
+> منطقة من الإجمالي، اتحسبوا بنفس الطريقة، فالداشبورد اللي فيه خليط
+> بين مناطق فيها موظفين ومناطق بأرقام إجمالية بس، بيطلع صح في كل حتة.
 
 ### 0. Edits now sync across devices and survive a cache clear
 
