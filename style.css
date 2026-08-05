@@ -26,7 +26,72 @@
   --shadow-lg: 0 20px 50px rgba(19, 32, 54, 0.16), 0 6px 18px rgba(19, 32, 54, 0.08);
   --radius: 14px;
   --radius-sm: 9px;
+
+  color-scheme: light;
 }
+
+/* ---------- Dark mode ----------
+   Toggled via the moon/sun button in the topbar. Every component below
+   is built on these same variable names, so no other selector needs a
+   dark-specific override — the palette swap alone carries the whole UI. */
+[data-theme="dark"] {
+  --ink: #eef1f5;
+  --ink-soft: #b9c2d1;
+  --ink-faint: #7c8aa0;
+  --bg: #0d1420;
+  --panel: #161f30;
+  --panel-line: #2a3550;
+  --sand: #d3a869;
+  --sand-soft: #33291a;
+  --navy: #0a1220;
+  --navy-2: #16233b;
+  --r-crit: #e07a5c;
+  --r-crit-bg: #3a2019;
+  --r-watch: #e0b355;
+  --r-watch-bg: #362a13;
+  --r-good: #6fbf94;
+  --r-good-bg: #163326;
+  --r-elite: #7fd0a2;
+  --r-elite-bg: #12291d;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
+}
+
+[data-theme="dark"] body {
+  background: var(--bg);
+}
+
+[data-theme="dark"] .leaflet-container {
+  background: #0a1220;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #1c2740;
+  color: var(--ink);
+  border-color: var(--panel-line);
+}
+
+[data-theme="dark"] .btn-ghost {
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #35415c;
+}
+
+[data-theme="dark"] .map-tool-btn,
+[data-theme="dark"] #map-report-header,
+[data-theme="dark"] .icon-btn,
+[data-theme="dark"] .page-btn {
+  background: var(--panel);
+  color: var(--ink);
+}
+
 
 * {
   box-sizing: border-box;
@@ -41,7 +106,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -53,11 +118,11 @@ body {
 }
 
 .mono {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .display {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 #app {
@@ -87,7 +152,7 @@ body {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-weight: 700;
   font-size: 13px;
   margin-bottom: 26px;
@@ -155,7 +220,7 @@ body {
   pointer-events: none;
   transition: opacity .12s ease;
   box-shadow: var(--shadow-md);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .nav-btn:hover .tip {
@@ -196,7 +261,7 @@ body {
 }
 
 #topbar h1 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 17px;
   font-weight: 600;
   margin: 0;
@@ -213,6 +278,15 @@ body {
   display: flex;
   flex-direction: column;
   margin-right: 6px;
+}
+
+.topbar-logo {
+  height: 34px;
+  width: auto;
+  max-width: 130px;
+  object-fit: contain;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .pulse-dot {
@@ -262,11 +336,11 @@ body {
   color: var(--ink-faint);
   text-align: right;
   line-height: 1.5;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .btn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -388,7 +462,7 @@ body {
 }
 
 .kpi-card .value {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 26px;
   font-weight: 700;
   margin-top: 4px;
@@ -418,7 +492,7 @@ body {
 }
 
 .panel-block h3 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 13px;
   font-weight: 600;
   margin: 0 0 12px;
@@ -450,7 +524,7 @@ body {
 }
 
 .rank-num {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 11px;
   color: var(--ink-faint);
   width: 16px;
@@ -482,7 +556,7 @@ body {
 }
 
 .rank-val {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 11.5px;
   font-weight: 600;
   width: 34px;
@@ -504,7 +578,7 @@ body {
 
 .leaflet-container {
   background: #dbe4ee;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 #map-legend {
@@ -573,13 +647,92 @@ body {
   color: var(--navy);
 }
 
+.map-tool-btn.active {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+
 .map-tool-btn svg {
   width: 16px;
   height: 16px;
 }
 
+/* ---------- Region on-map labels (for print / report export) ---------- */
+.region-map-label {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(19, 32, 54, 0.15);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(19, 32, 54, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.region-map-label .rml-name {
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 10.5px;
+  margin-bottom: 1px;
+}
+
+/* ---------- Report header overlay (print / PNG export only) ---------- */
+#map-report-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 450;
+  background: #fff;
+  padding: 14px 20px;
+  border-bottom: 2px solid var(--navy);
+  text-align: center;
+}
+
+#map-report-header .mrh-title {
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--navy);
+}
+
+#map-report-header .mrh-sub {
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ---------- Print ---------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #map-col, #map-col * {
+    visibility: visible;
+  }
+  #map-col {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+  #nav, #topbar, #kpi-rail, #map-toolbar, #region-panel, #boundary-edit-bar {
+    display: none !important;
+  }
+  #map-legend {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
+
 .region-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-weight: 600;
   font-size: 11px;
   color: var(--navy);
@@ -621,7 +774,7 @@ body {
 }
 
 #region-panel .rp-title {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 20px;
   font-weight: 700;
   margin-top: 3px;
@@ -666,7 +819,7 @@ body {
 }
 
 .rp-stat .v {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 19px;
   font-weight: 700;
   margin-top: 2px;
@@ -706,7 +859,7 @@ body {
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .emp-mini .info {
@@ -728,7 +881,7 @@ body {
 }
 
 .emp-mini .p {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 12px;
   font-weight: 700;
 }
@@ -739,7 +892,7 @@ body {
 }
 
 .emp-mini .p-sub {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 10px;
   color: var(--ink-faint);
   margin-top: 2px;
@@ -757,7 +910,7 @@ body {
 }
 
 .view-header h2 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 19px;
   margin: 0;
   font-weight: 700;
@@ -800,7 +953,7 @@ body {
   border-radius: 9px;
   border: 1px solid var(--panel-line);
   font-size: 13px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   background: #fff;
 }
 
@@ -812,7 +965,7 @@ select,
   font-size: 13px;
   background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%238592a6"/></svg>') no-repeat right 12px center;
   appearance: none;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   color: var(--ink);
   cursor: pointer;
 }
@@ -825,7 +978,7 @@ textarea {
   border-radius: 9px;
   border: 1px solid var(--panel-line);
   font-size: 13px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   width: 100%;
   background: #fff;
 }
@@ -970,7 +1123,7 @@ tbody tr:hover {
   background: #fff;
   cursor: pointer;
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .page-btn.active {
@@ -998,6 +1151,47 @@ tbody tr:hover {
   overflow-y: auto;
 }
 
+#view-builder {
+  padding: 22px 26px 40px;
+  overflow-y: auto;
+}
+
+.builder-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+.builder-panel .form-row {
+  margin-bottom: 0;
+  min-width: 150px;
+}
+
+.chart-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.chart-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chart-card-actions .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
@@ -1021,7 +1215,7 @@ tbody tr:hover {
 }
 
 .chart-card h3 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 14px;
   margin: 0 0 4px;
   font-weight: 600;
@@ -1081,7 +1275,33 @@ tbody tr:hover {
   background: var(--panel);
   border: 1px solid var(--panel-line);
   border-radius: 10px;
+  margin-bottom: 0;
+}
+
+.region-admin-row-wrap {
   margin-bottom: 8px;
+}
+
+.manual-data-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--sand);
+  background: var(--sand-soft);
+  border-radius: 6px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.region-totals-form {
+  background: var(--bg);
+  border: 1px solid var(--panel-line);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  padding: 14px;
+  margin-top: -8px;
 }
 
 .region-admin-row .region-color-input {
@@ -1105,7 +1325,7 @@ tbody tr:hover {
 }
 
 .region-admin-row .rid {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 11px;
   color: var(--ink-faint);
   width: 34px;
@@ -1179,7 +1399,7 @@ tbody tr:hover {
 
 .import-zone h4 {
   margin: 0 0 4px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
 }
 
 .import-zone p {
@@ -1230,7 +1450,7 @@ tbody tr:hover {
 }
 
 .modal-head h3 {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-size: 16px;
   margin: 0;
   font-weight: 700;
@@ -1339,7 +1559,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Calibri', 'Calibri Light', 'Segoe UI', Candara, Optima, Arial, sans-serif;
   font-weight: 700;
   font-size: 12px;
   margin-bottom: 16px;
