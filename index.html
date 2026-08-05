@@ -4,9 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CPV Arabia - Regional Productivity Dashboard</title>
+  <script>
+    // Applied before first paint so switching pages/reloading never
+    // shows a flash of the wrong theme. Purely a personal display
+    // preference, so it's kept in localStorage only — not synced to
+    // the shared /api/state backend like the organizational settings.
+    (function() {
+      try {
+        var saved = localStorage.getItem('cpv:theme');
+        if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Calibri is a system font (bundled with Microsoft Office/Windows), so
+       no webfont request is needed — the CSS font stack in style.css
+       falls back gracefully to Segoe UI / Candara / Arial where Calibri
+       itself isn't installed on the viewer's machine. -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,6 +46,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M8 17V9m5 8V5m5 12v-6"/></svg>
         <span class="tip">Analytics</span>
       </button>
+      <button class="nav-btn" data-view="builder" aria-label="Chart Builder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10m6 10V4m6 16v-7"/><circle cx="19" cy="6" r="2.6"/><path d="M19 4.8v2.4M17.8 6h2.4"/></svg>
+        <span class="tip">Chart Builder</span>
+      </button>
       <button class="nav-btn" data-view="admin" aria-label="Admin">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.35.68.63.95.28.28.6.5.96.63.36.13.75.18 1.13.15H22a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         <span class="tip">Admin</span>
@@ -42,12 +60,17 @@
 
     <div id="main">
       <div id="topbar">
+        <img id="topbar-logo" class="topbar-logo hidden" alt="Company logo">
         <div class="topbar-title-wrap">
           <h1 id="topbar-title">Overview</h1>
           <div class="subtitle" id="topbar-subtitle">Live regional performance</div>
         </div>
         <div class="ticker"><span class="pulse-dot"></span><span id="ticker-label">Company Productivity</span> <b id="ticker-value">--</b></div>
         <div class="topbar-spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg id="theme-icon-sun" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
         <button class="btn btn-ghost btn-sm" id="btn-export" title="Export employee list to CSV">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Export
@@ -64,10 +87,23 @@
         <div class="view active" id="view-overview">
           <div id="kpi-rail"></div>
           <div id="map-col">
+            <div id="map-report-header" class="hidden">
+              <div class="mrh-title" id="mrh-title">Regional Productivity Map</div>
+              <div class="mrh-sub" id="mrh-sub"></div>
+            </div>
             <div id="map"></div>
             <div id="map-toolbar">
               <div class="map-tool-btn" id="btn-fit" title="Fit to all regions" aria-label="Fit to all regions">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+              </div>
+              <div class="map-tool-btn" id="btn-toggle-labels" title="Show / hide region labels" aria-label="Toggle region labels">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h9l7-7-7-7H5a2 2 0 00-2 2z"/><circle cx="10.5" cy="12" r="1"/></svg>
+              </div>
+              <div class="map-tool-btn" id="btn-map-png" title="Download map as PNG (for Word/PowerPoint)" aria-label="Download map as PNG">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              </div>
+              <div class="map-tool-btn" id="btn-map-print" title="Print map" aria-label="Print map">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
               </div>
             </div>
             <div id="map-legend"></div>
@@ -154,29 +190,106 @@
           </div>
           <div class="grid-2">
             <div class="chart-card">
-              <h3 id="chart-region-bar-title">Productivity by Region</h3>
-              <div class="sub">Average productivity, ranked</div>
+              <div class="chart-card-head">
+                <div><h3 id="chart-region-bar-title">Productivity by Region</h3><div class="sub">Average productivity, ranked</div></div>
+                <button class="icon-btn" id="btn-dl-region-bar" title="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+              </div>
               <canvas id="chart-region-bar"></canvas>
             </div>
             <div class="chart-card">
-              <h3 id="chart-tier-donut-title">Performance Distribution</h3>
-              <div class="sub">Employee tier breakdown · Jul '26</div>
+              <div class="chart-card-head">
+                <div><h3 id="chart-tier-donut-title">Performance Distribution</h3><div class="sub">Employee tier breakdown · Jul '26</div></div>
+                <button class="icon-btn" id="btn-dl-tier-donut" title="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+              </div>
               <canvas id="chart-tier-donut"></canvas>
             </div>
           </div>
           <div class="grid-2">
             <div class="chart-card">
-              <h3 id="chart-top-employees-title">Top 8 Employees</h3>
-              <div class="sub">By productivity score</div>
+              <div class="chart-card-head">
+                <div><h3 id="chart-top-employees-title">Top 8 Employees</h3><div class="sub">By productivity score</div></div>
+                <button class="icon-btn" id="btn-dl-top-employees" title="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+              </div>
               <canvas id="chart-top-employees"></canvas>
             </div>
             <div class="chart-card">
-              <h3 id="chart-activity-title">Activity Volume by Region</h3>
-              <div class="sub">Visits vs. completed tasks</div>
+              <div class="chart-card-head">
+                <div><h3 id="chart-activity-title">Activity Volume by Region</h3><div class="sub">Visits vs. completed tasks</div></div>
+                <button class="icon-btn" id="btn-dl-activity" title="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
+              </div>
               <canvas id="chart-activity"></canvas>
             </div>
           </div>
           <div class="grid-3" id="analytics-callouts"></div>
+        </div>
+
+        <!-- CHART BUILDER -->
+        <div class="view" id="view-builder">
+          <div class="view-header" style="padding:0;">
+            <div>
+              <h2>Chart Builder</h2>
+              <p>Build your own charts — by region or by employee — and keep the ones you use</p>
+            </div>
+          </div>
+          <div class="builder-panel">
+            <div class="form-row">
+              <label>Group By</label>
+              <select id="cb-groupby">
+                <option value="region">Region</option>
+                <option value="employee">Employee</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Metric</label>
+              <select id="cb-metric"></select>
+            </div>
+            <div class="form-row">
+              <label>Compare With (optional)</label>
+              <select id="cb-compare"><option value="">— None —</option></select>
+            </div>
+            <div class="form-row">
+              <label>Chart Type</label>
+              <select id="cb-type">
+                <option value="bar">Vertical Bar</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="line">Line</option>
+                <option value="pie">Pie</option>
+                <option value="doughnut">Doughnut</option>
+              </select>
+            </div>
+            <div class="form-row" id="cb-region-filter-row">
+              <label>Region Filter</label>
+              <select id="cb-region-filter"><option value="">All Regions</option></select>
+            </div>
+            <div class="form-row" id="cb-limit-row">
+              <label>Show Top</label>
+              <select id="cb-limit">
+                <option value="5">5</option>
+                <option value="8" selected>8</option>
+                <option value="12">12</option>
+                <option value="20">20</option>
+                <option value="0">All</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="cb-show-labels">
+                <span>Show data labels on chart</span>
+              </label>
+            </div>
+            <div class="form-row" style="align-self:flex-end;">
+              <button class="btn btn-primary btn-sm" id="cb-add">+ Add Chart</button>
+            </div>
+          </div>
+          <div class="grid-2" id="cb-preview-wrap">
+            <div class="chart-card">
+              <h3>Preview</h3>
+              <div class="sub" id="cb-preview-sub">Configure options above</div>
+              <canvas id="cb-preview-canvas"></canvas>
+            </div>
+          </div>
+          <div style="margin:20px 0 10px;font-size:13px;font-weight:700;color:var(--ink-soft);">Saved Charts</div>
+          <div class="grid-2" id="cb-saved-charts"></div>
         </div>
 
         <!-- ADMIN -->
@@ -208,6 +321,27 @@
 
           <div class="admin-pane" id="pane-settings">
             <div class="chart-card" style="max-width:520px;">
+              <h3>Branding</h3>
+              <div class="sub">Shown in the topbar and on exported map/chart reports</div>
+              <div class="form-row">
+                <label>Company Name</label>
+                <input type="text" id="branding-company-name" placeholder="CPV Arabia">
+              </div>
+              <div class="form-row">
+                <label>Company Logo</label>
+                <div id="branding-logo-preview-wrap" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                  <img id="branding-logo-preview" class="hidden" alt="Logo preview" style="height:40px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid var(--panel-line);background:#fff;padding:4px;">
+                  <span id="branding-logo-empty" style="font-size:12px;color:var(--ink-faint);">No logo uploaded yet</span>
+                </div>
+                <input type="file" id="branding-logo-input" accept="image/*" class="hidden">
+                <div style="display:flex;gap:8px;">
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-branding-logo-pick">Upload Logo</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-branding-logo-remove">Remove Logo</button>
+                </div>
+              </div>
+              <button class="btn btn-sand btn-sm" id="btn-save-branding" style="margin-top:6px;">Save Branding</button>
+            </div>
+            <div class="chart-card" style="max-width:520px;margin-top:16px;">
               <h3>Productivity Thresholds</h3>
               <div class="sub">Controls region map coloring and performance tiers</div>
               <div id="threshold-list"></div>
@@ -253,7 +387,7 @@
               <div class="import-zone">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>
                 <h4>Import Employees (CSV or Excel)</h4>
-                <p>Columns: name, region, status, productivity, productivityJul, productivityAvg3m, visits, completedTasks, projects. Productivity figures are plain numbers you enter — not percentages. Header names are matched flexibly (e.g. "Region" or "July").</p>
+                <p>Columns: name, region, status, productivity, productivityJul, productivityAvg3m, visits, completedTasks, projects. Productivity figures are plain numbers you enter — not percentages. Header names are matched flexibly (e.g. "Region" or "July"). <b>Rows with a region but no name</b> are treated as region-level totals (also add an "employeeCount" column) — useful when you only have aggregate numbers for a region, not individual employees.</p>
                 <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls" class="hidden" aria-label="Choose CSV or Excel file">
                 <button class="btn btn-primary btn-sm" id="btn-csv-import">Choose CSV or Excel File</button>
               </div>
@@ -401,7 +535,9 @@
       leaflet: false,
       chart: false,
       papa: false,
-      xlsx: false
+      xlsx: false,
+      html2canvas: false,
+      datalabels: false
     };
 
     // Load Leaflet with fallbacks
@@ -436,8 +572,31 @@
           errorText.textContent = 'Chart.js failed to load. Charts will not render.';
           document.getElementById('app-error').classList.add('show');
         }
+        checkAllLibrariesLoaded();
+        return;
       }
-      checkAllLibrariesLoaded();
+      Chart.defaults.font.family = "'Calibri','Calibri Light','Segoe UI',Candara,Optima,Arial,sans-serif";
+      // Data-labels-on-charts (Chart Builder → "Show data labels") needs
+      // Chart.js to exist first, so it's chained here rather than loaded
+      // in parallel. Purely additive — charts still work fine if this
+      // fails to load, they just won't offer the data-label option.
+      loadScriptWithFallback([
+        'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js',
+        'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js',
+        'https://unpkg.com/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js'
+      ], function(dlLoaded) {
+        librariesLoaded.datalabels = dlLoaded;
+        if (dlLoaded && typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
+          Chart.register(ChartDataLabels);
+          // Off by default everywhere — every existing chart (Analytics
+          // view, KPI cards, etc.) keeps its current look. Chart Builder
+          // turns this on per-chart via its own "Show data labels" option.
+          Chart.defaults.set('plugins.datalabels', { display: false });
+        } else if (!dlLoaded) {
+          console.warn('chartjs-plugin-datalabels failed to load. "Show data labels" option will be unavailable.');
+        }
+        checkAllLibrariesLoaded();
+      });
     });
 
     // Load PapaParse with fallbacks
@@ -463,6 +622,20 @@
       librariesLoaded.xlsx = loaded;
       if (!loaded) {
         console.warn('SheetJS failed to load. Excel import will not work (CSV import still will).');
+      }
+    });
+
+    // Load html2canvas (background, non-blocking) — used for "Download map
+    // as PNG". Not required for the app to start; falls back gracefully to
+    // the Print button if it can't load.
+    loadScriptWithFallback([
+      'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+      'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+      'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+    ], function(loaded) {
+      librariesLoaded.html2canvas = loaded;
+      if (!loaded) {
+        console.warn('html2canvas failed to load. Map PNG export will not work (Print still will).');
       }
     });
 
