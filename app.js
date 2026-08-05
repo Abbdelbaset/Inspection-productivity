@@ -1119,7 +1119,10 @@ const KEYS = {
   visibility: 'cpv:visibility',
   geoVersion: 'cpv:geoVersion',
   labels: 'cpv:labels',
-  boundaryEdits: 'cpv:boundaryEdits'
+  boundaryEdits: 'cpv:boundaryEdits',
+  regionAggregates: 'cpv:regionAggregates',
+  customCharts: 'cpv:customCharts',
+  mapLabelPositions: 'cpv:mapLabelPositions'
 };
 
 // Bump this whenever DEFAULT_REGIONS_GEOJSON or the KML parsing rules
@@ -1129,7 +1132,8 @@ const REGIONS_CACHE_VERSION = 'kml-2026-08-02-abha-fix';
 
 const DEFAULT_SETTINGS = {
   thresholds: { critical: 50, watch: 70, good: 85 },
-  companyName: 'CPV Arabia'
+  companyName: 'CPV Arabia',
+  logoDataUrl: ''
 };
 
 const DEFAULT_VISIBILITY = {
@@ -1312,7 +1316,11 @@ const State = {
   initialized: false,
   labels: null,
   boundaryEdits: {},
-  boundaryEditing: null
+  boundaryEditing: null,
+  regionAggregates: {},
+  customCharts: [],
+  mapLabelsOn: false,
+  mapLabelPositions: {}
 };
 
 /* ---------------------------------------------------------------------
@@ -1357,6 +1365,33 @@ function fmtProd(v) {
 
 function computeRegionStats(regionId) {
   const emps = State.employees.filter(e => e.regionId === regionId);
+
+  if (!emps.length && State.regionAggregates[regionId]) {
+    // No employee-level rows for this region — use the manually entered
+    // (or region-only-imported) totals instead, so the map/KPIs/charts
+    // still reflect this region correctly.
+    const agg = State.regionAggregates[regionId];
+    const jul = Number(agg.avgProductivityJul) || 0;
+    const avg3m = Number(agg.avgProductivityAvg3m) || jul;
+    const count = Number(agg.employeeCount) || 0;
+    return {
+      regionId: regionId,
+      employeeCount: count,
+      avgProductivity: jul,
+      avgProductivityJul: jul,
+      avgProductivityAvg3m: avg3m,
+      avgScore: jul,
+      totalVisits: Number(agg.totalVisits) || 0,
+      totalTasks: Number(agg.totalTasks) || 0,
+      totalProjects: Number(agg.totalProjects) || 0,
+      totalProductivityJul: jul * count,
+      topEmployee: null,
+      bottomEmployee: null,
+      employees: [],
+      isManual: true
+    };
+  }
+
   const avgProductivity = emps.length ? emps.reduce((s, e) => s + e.productivity, 0) / emps.length : 0;
   const avgProductivityJul = emps.length ? emps.reduce((s, e) => s + (e.productivityJul || e.productivity), 0) / emps.length : 0;
   const avgProductivityAvg3m = emps.length ? emps.reduce((s, e) => s + (e.productivityAvg3m || e.productivity), 0) / emps.length : 0;
@@ -1379,14 +1414,15 @@ function computeRegionStats(regionId) {
     totalProductivityJul: totalProductivityJul,
     topEmployee: sorted[0] || null,
     bottomEmployee: sorted[sorted.length - 1] || null,
-    employees: emps
+    employees: emps,
+    isManual: false
   };
 }
 
 // Region's share of the whole company's July productivity output —
 // shown on map hover, e.g. "18% of total productivity".
 function regionProductivityShare(regionId) {
-  var companyTotal = State.employees.reduce(function(s, e) { return s + (e.productivityJul || e.productivity); }, 0);
+  var companyTotal = State.regions.reduce(function(s, r) { return s + computeRegionStats(r.id).totalProductivityJul; }, 0);
   if (!companyTotal) return 0;
   var regionTotal = computeRegionStats(regionId).totalProductivityJul;
   return (regionTotal / companyTotal) * 100;
@@ -1394,22 +1430,30 @@ function regionProductivityShare(regionId) {
 
 function companyKPIs() {
   const emps = State.employees;
-  const avgProductivity = emps.length ? emps.reduce((s, e) => s + e.productivity, 0) / emps.length : 0;
-  const avgProductivityJul = emps.length ? emps.reduce((s, e) => s + (e.productivityJul || e.productivity), 0) / emps.length : 0;
-  const avgProductivityAvg3m = emps.length ? emps.reduce((s, e) => s + (e.productivityAvg3m || e.productivity), 0) / emps.length : 0;
-  // Total company productivity — the sum of every employee's July
-  // productivity figure, not an average. This is the headline number
-  // on the Company Productivity KPI card.
-  const totalProductivity = emps.reduce((s, e) => s + (e.productivityJul || e.productivity), 0);
-  const totalVisits = emps.reduce((s, e) => s + e.visits, 0);
-  const totalTasks = emps.reduce((s, e) => s + e.completedTasks, 0);
   const regionStats = State.regions.map(r => computeRegionStats(r.id)).filter(rs => rs.employeeCount > 0);
+
+  // Company-wide totals/averages are weighted across every region's stats
+  // (computeRegionStats already blends actual employee records with any
+  // manually-entered region totals), so a region imported as aggregate-
+  // only numbers still counts toward the company picture.
+  const totalEmployees = regionStats.reduce((s, rs) => s + rs.employeeCount, 0);
+  const weightedJul = regionStats.reduce((s, rs) => s + rs.avgProductivityJul * rs.employeeCount, 0);
+  const weightedAvg3m = regionStats.reduce((s, rs) => s + rs.avgProductivityAvg3m * rs.employeeCount, 0);
+  const avgProductivityJul = totalEmployees ? weightedJul / totalEmployees : 0;
+  const avgProductivityAvg3m = totalEmployees ? weightedAvg3m / totalEmployees : 0;
+  const avgProductivity = avgProductivityJul;
+  // Total company productivity — the sum of every employee's July
+  // productivity figure (or, for manual regions, avg × headcount). This
+  // is the headline number on the Company Productivity KPI card.
+  const totalProductivity = regionStats.reduce((s, rs) => s + rs.totalProductivityJul, 0);
+  const totalVisits = regionStats.reduce((s, rs) => s + rs.totalVisits, 0);
+  const totalTasks = regionStats.reduce((s, rs) => s + rs.totalTasks, 0);
   const best = regionStats.length ? regionStats.reduce((a, b) => (b.avgProductivity > a.avgProductivity ? b : a)) : null;
   const worst = regionStats.length ? regionStats.reduce((a, b) => (b.avgProductivity < a.avgProductivity ? b : a)) : null;
   const bestEmployee = emps.length ? [...emps].sort((a, b) => b.productivity - a.productivity)[0] : null;
   const worstEmployee = emps.length ? [...emps].sort((a, b) => a.productivity - b.productivity)[0] : null;
   return { 
-    totalEmployees: emps.length, 
+    totalEmployees: totalEmployees, 
     avgProductivity: avgProductivity,
     avgProductivityJul: avgProductivityJul,
     avgProductivityAvg3m: avgProductivityAvg3m,
@@ -1444,7 +1488,7 @@ function showFatalLoadError(detail) {
   screen.innerHTML = `
     <div class="mark" style="background:linear-gradient(135deg,#b3462c,#7a2f1c);">!</div>
     <div style="max-width:380px;text-align:center;padding:0 20px;">
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;">Dashboard couldn't finish loading</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Dashboard couldn't finish loading</div>
       <div style="font-size:12.5px;color:#c3cede;line-height:1.6;margin-bottom:14px;">
         Try opening <b>index.html</b> directly in a full browser tab.
       </div>
@@ -1478,6 +1522,9 @@ function bootstrap() {
     const storedVisibility = DataStore.get(KEYS.visibility, null);
     const storedLabels = DataStore.get(KEYS.labels, null);
     const storedBoundaryEdits = DataStore.get(KEYS.boundaryEdits, null);
+    const storedRegionAggregates = DataStore.get(KEYS.regionAggregates, null);
+    const storedCustomCharts = DataStore.get(KEYS.customCharts, null);
+    const storedMapLabelPositions = DataStore.get(KEYS.mapLabelPositions, null);
 
     if (cacheIsStale) {
       // A previous session cached region geometry from an older/incorrect
@@ -1503,7 +1550,10 @@ function bootstrap() {
     }
 
     State.geojson = liveGeo || storedGeo || DEFAULT_REGIONS_GEOJSON;
-    State.settings = storedSettings || DEFAULT_SETTINGS;
+    // Merge additively — same reasoning as labels below — so a new
+    // default field (e.g. logoDataUrl) added later is never silently
+    // missing just because the person already has saved settings.
+    State.settings = Object.assign({}, DEFAULT_SETTINGS, storedSettings || {});
     State.visibility = storedVisibility || DEFAULT_VISIBILITY;
     // Merge additively so new label keys added in future updates still
     // get a sensible default even if the person already customized others.
@@ -1527,6 +1577,9 @@ function bootstrap() {
       };
     }
     State.boundaryEdits = storedBoundaryEdits || {};
+    State.regionAggregates = storedRegionAggregates || {};
+    State.customCharts = storedCustomCharts || [];
+    State.mapLabelPositions = storedMapLabelPositions || {};
 
     // Build regions
     const existingRegionById = Object.fromEntries((storedRegions || []).map(r => [r.id, r]));
@@ -1556,6 +1609,9 @@ function bootstrap() {
     if (!storedSettings) DataStore.set(KEYS.settings, State.settings);
     if (!storedVisibility) DataStore.set(KEYS.visibility, State.visibility);
     DataStore.set(KEYS.labels, State.labels);
+    if (!storedRegionAggregates) DataStore.set(KEYS.regionAggregates, State.regionAggregates);
+    if (!storedCustomCharts) DataStore.set(KEYS.customCharts, State.customCharts);
+    if (!storedMapLabelPositions) DataStore.set(KEYS.mapLabelPositions, State.mapLabelPositions);
 
     // Initialize map if Leaflet is available
     if (typeof L !== 'undefined') {
@@ -1592,6 +1648,7 @@ function bootstrap() {
     wireAdmin();
     wireEmployeeTableControls();
     wireEmployeesBulkActions();
+    wireBuilderControls();
     renderAll();
     startClock();
 
@@ -1612,15 +1669,18 @@ function bootstrap() {
 
 function renderAll() {
   applyDashboardLabels();
+  applyBrandingToTopbar();
   renderKPIRail();
   renderMapColors();
   renderTopbarTicker();
   renderEmployeesView();
   renderAnalytics();
+  renderBuilder();
   renderRegionAdmin();
   renderThresholdSettings();
   renderVisibilityControls();
   renderLabelSettings();
+  renderBrandingSettings();
   populateRegionSelects();
 }
 
@@ -1631,6 +1691,7 @@ const VIEW_META = {
   overview: { title: 'Overview', sub: 'Live regional performance' },
   employees: { title: 'Employee Directory', sub: 'Search, filter, and manage the workforce' },
   analytics: { title: 'Business Intelligence', sub: 'Cross-region performance analytics' },
+  builder: { title: 'Chart Builder', sub: 'Build and save your own charts' },
   admin: { title: 'Administration', sub: 'Regions, imports, and system settings' }
 };
 
@@ -1658,6 +1719,9 @@ function switchView(view) {
   }
   if (view === 'analytics') {
     setTimeout(renderAnalytics, 30);
+  }
+  if (view === 'builder') {
+    setTimeout(renderBuilder, 30);
   }
 }
 
@@ -1688,6 +1752,44 @@ function wireTopbar() {
     openEmployeeModal(null);
   });
   document.getElementById('btn-export').addEventListener('click', exportEmployeesCSV);
+  wireThemeToggle();
+}
+
+/* ---------------------------------------------------------------------
+   7b. Dark mode
+   A personal display preference (kept in localStorage, not synced to
+   the shared backend) — applied via a `data-theme="dark"` attribute on
+   <html> that style.css keys its dark palette off of. The map's tile
+   layer is swapped to CartoDB's matching dark basemap so it doesn't
+   stay a glaring white rectangle.
+------------------------------------------------------------------- */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+  var moonIcon = document.getElementById('theme-icon-moon');
+  var sunIcon = document.getElementById('theme-icon-sun');
+  if (moonIcon && sunIcon) {
+    moonIcon.classList.toggle('hidden', theme === 'dark');
+    sunIcon.classList.toggle('hidden', theme !== 'dark');
+  }
+  if (State.map && State.tileLayer) {
+    State.tileLayer.setUrl(mapTileUrlForTheme());
+  }
+}
+
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  var next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem('cpv:theme', next); } catch (e) {}
+}
+
+function wireThemeToggle() {
+  var btn = document.getElementById('btn-theme-toggle');
+  if (!btn) return;
+  // Sync the icon/map to whatever the inline head script already
+  // applied before first paint (avoids a flash, see index.html).
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+  btn.addEventListener('click', toggleTheme);
 }
 
 function renderTopbarTicker() {
@@ -1791,14 +1893,22 @@ function colorForRegion(rid) {
 
 function initMap() {
   State.map = L.map('map', { zoomControl: false, attributionControl: false, minZoom: 4 });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  State.tileLayer = L.tileLayer(mapTileUrlForTheme(), {
     maxZoom: 19, subdomains: 'abcd'
   }).addTo(State.map);
   L.control.zoom({ position: 'bottomright' }).addTo(State.map);
 
   buildGeoLayer();
   document.getElementById('btn-fit').addEventListener('click', fitMapToRegions);
+  wireMapExportControls();
   document.getElementById('rp-close').addEventListener('click', function() { selectRegion(null); });
+}
+
+// CartoDB ships a matching dark basemap, so dark mode doesn't leave a
+// blinding white rectangle in the middle of an otherwise dark page.
+function mapTileUrlForTheme() {
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return 'https://{s}.basemaps.cartocdn.com/' + (isDark ? 'dark_all' : 'light_all') + '/{z}/{x}/{y}{r}.png';
 }
 
 // Tooltip shown on map hover: region name, employee count, and the
@@ -1807,16 +1917,24 @@ function initMap() {
 function regionTooltipHTML(rid) {
   var stats = computeRegionStats(rid);
   var share = regionProductivityShare(rid);
-  return '<div style="font-family:\'Space Grotesk\',sans-serif;font-weight:700;font-size:12.5px;">' + regionName(rid) + '</div>' +
-    '<div style="font-family:\'JetBrains Mono\',monospace;font-size:11px;margin-top:2px;">' + stats.employeeCount + ' employees · Jul: ' + fmtProd(stats.avgProductivityJul) + '</div>' +
-    '<div style="font-family:\'JetBrains Mono\',monospace;font-size:11px;margin-top:2px;">' + share.toFixed(1) + '% of total productivity</div>';
+  return '<div style="font-weight:700;font-size:12.5px;">' + regionName(rid) + '</div>' +
+    '<div style="font-size:11px;margin-top:2px;">' + stats.employeeCount + ' employees · Jul: ' + fmtProd(stats.avgProductivityJul) + '</div>' +
+    '<div style="font-size:11px;margin-top:2px;">' + share.toFixed(1) + '% of total productivity</div>';
 }
 
 function buildGeoLayer() {
   if (State.geoLayer) {
     State.map.removeLayer(State.geoLayer);
   }
-  State.geoLayer = L.geoJSON(State.geojson, {
+  // Regions marked hidden (Admin → Regions → "Hide from map") keep
+  // their data/employees intact but are skipped when drawing the map.
+  var hiddenIds = {};
+  State.regions.forEach(function(r) { if (r.hidden) hiddenIds[r.id] = true; });
+  var visibleGeojson = {
+    type: 'FeatureCollection',
+    features: State.geojson.features.filter(function(f) { return !hiddenIds[f.properties.id]; })
+  };
+  State.geoLayer = L.geoJSON(visibleGeojson, {
     style: featureStyle,
     onEachFeature: function(feature, layer) {
       var rid = feature.properties.id;
@@ -1835,6 +1953,7 @@ function buildGeoLayer() {
   
   fitMapToRegions();
   renderMapLegend();
+  if (State.mapLabelsOn) showMapLabels();
 }
 
 function featureStyle(feature) {
@@ -1860,6 +1979,7 @@ function renderMapColors() {
     var rid = layer.feature.properties.id;
     layer.setTooltipContent(regionTooltipHTML(rid));
   });
+  if (State.mapLabelsOn) showMapLabels();
 }
 
 function fitMapToRegions() {
@@ -1877,6 +1997,136 @@ function renderMapLegend() {
     '<div class="row"><span class="sw" style="background:' + TIER_META.good.hex + '"></span>' + tierLabel('good') + ' · ' + t.watch + '–' + (t.good - 1) + '</div>' +
     '<div class="row"><span class="sw" style="background:' + TIER_META.watch.hex + '"></span>' + tierLabel('watch') + ' · ' + t.critical + '–' + (t.watch - 1) + '</div>' +
     '<div class="row"><span class="sw" style="background:' + TIER_META.critical.hex + '"></span>' + tierLabel('critical') + ' · &lt;' + t.critical + '</div>';
+}
+
+/* ---------------------------------------------------------------------
+   9b. On-map region labels — for print / report export. Shows employee
+   count, this region's share of total company productivity, the
+   3-month average, and July productivity, all in one small label
+   anchored to the region's center.
+------------------------------------------------------------------- */
+State.mapLabelMarkers = [];
+
+function regionLabelHTML(rid) {
+  var stats = computeRegionStats(rid);
+  var share = regionProductivityShare(rid);
+  return '<div class="rml-name">' + regionName(rid) + '</div>' +
+    '<div>' + stats.employeeCount + ' employees · ' + share.toFixed(1) + '% of total</div>' +
+    '<div>3-mo avg: ' + fmtProd(stats.avgProductivityAvg3m) + ' · Jul: ' + fmtProd(stats.avgProductivityJul) + '</div>';
+}
+
+function showMapLabels() {
+  if (!State.map || !State.geoLayer || typeof L === 'undefined') return;
+  hideMapLabels();
+  State.geoLayer.eachLayer(function(layer) {
+    var rid = layer.feature.properties.id;
+    var saved = State.mapLabelPositions[rid];
+    var center = saved ? L.latLng(saved.lat, saved.lng) : layer.getBounds().getCenter();
+    var icon = L.divIcon({ className: 'region-map-label', html: regionLabelHTML(rid), iconSize: null });
+    // Draggable so overlapping labels can be pulled apart by hand —
+    // the new position is saved per region and reused every time
+    // labels are shown (including in the exported PNG).
+    var marker = L.marker(center, { icon: icon, interactive: true, keyboard: false, draggable: true }).addTo(State.map);
+    marker.on('dragend', function() {
+      var pos = marker.getLatLng();
+      State.mapLabelPositions[rid] = { lat: pos.lat, lng: pos.lng };
+      DataStore.set(KEYS.mapLabelPositions, State.mapLabelPositions);
+    });
+    State.mapLabelMarkers.push(marker);
+  });
+}
+
+function hideMapLabels() {
+  State.mapLabelMarkers.forEach(function(m) { State.map.removeLayer(m); });
+  State.mapLabelMarkers = [];
+}
+
+function toggleMapLabels() {
+  State.mapLabelsOn = !State.mapLabelsOn;
+  var btn = document.getElementById('btn-toggle-labels');
+  if (btn) btn.classList.toggle('active', State.mapLabelsOn);
+  if (State.mapLabelsOn) showMapLabels(); else hideMapLabels();
+}
+
+function showMapReportHeader() {
+  var header = document.getElementById('map-report-header');
+  document.getElementById('mrh-title').textContent = (State.settings.companyName || 'CPV Arabia') + ' — Regional Productivity Map';
+  var dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  var kpi = companyKPIs();
+  document.getElementById('mrh-sub').textContent = dateStr + ' · Company avg (Jul): ' + fmtProd(kpi.avgProductivityJul) + ' · ' + kpi.totalEmployees + ' employees';
+  header.classList.remove('hidden');
+}
+
+function hideMapReportHeader() {
+  document.getElementById('map-report-header').classList.add('hidden');
+}
+
+function printMap() {
+  var labelsWereOn = State.mapLabelsOn;
+  if (!labelsWereOn) showMapLabels();
+  showMapReportHeader();
+  setTimeout(function() {
+    window.print();
+    setTimeout(function() {
+      hideMapReportHeader();
+      if (!labelsWereOn) hideMapLabels();
+    }, 300);
+  }, 150);
+}
+
+// Temporarily makes region shapes invisible (no fill, no border) while
+// keeping the base map tiles and the on-map labels — used for PNG
+// export, since the labels + basemap read cleaner in a report without
+// the colored region outlines competing for attention.
+function setBoundariesHiddenForExport(hidden) {
+  if (!State.geoLayer) return;
+  State.geoLayer.eachLayer(function(layer) {
+    if (hidden) {
+      layer.setStyle({ fillOpacity: 0, opacity: 0, weight: 0 });
+    } else {
+      layer.setStyle(featureStyle(layer.feature));
+    }
+  });
+}
+
+function downloadMapAsPNG() {
+  if (typeof html2canvas === 'undefined') {
+    showToast('PNG export isn\'t available right now — try the Print button instead.', 'err');
+    return;
+  }
+  var labelsWereOn = State.mapLabelsOn;
+  if (!labelsWereOn) showMapLabels();
+  showMapReportHeader();
+  setBoundariesHiddenForExport(true);
+
+  var mapCol = document.getElementById('map-col');
+  setTimeout(function() {
+    html2canvas(mapCol, { useCORS: true, allowTaint: true, backgroundColor: '#ffffff', scale: 2 }).then(function(canvas) {
+      var link = document.createElement('a');
+      link.download = 'regional_productivity_map_' + new Date().toISOString().slice(0, 10) + '.png';
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.click();
+      showToast('Map downloaded.', 'ok');
+      hideMapReportHeader();
+      setBoundariesHiddenForExport(false);
+      if (!labelsWereOn) hideMapLabels();
+    }).catch(function(e) {
+      console.warn('Map PNG export failed:', e);
+      showToast('Could not export the map image — try Print instead.', 'err');
+      hideMapReportHeader();
+      setBoundariesHiddenForExport(false);
+      if (!labelsWereOn) hideMapLabels();
+    });
+  }, 200);
+}
+
+function wireMapExportControls() {
+  var labelsBtn = document.getElementById('btn-toggle-labels');
+  var pngBtn = document.getElementById('btn-map-png');
+  var printBtn = document.getElementById('btn-map-print');
+  if (labelsBtn && !labelsBtn.dataset.wired) { labelsBtn.dataset.wired = '1'; labelsBtn.addEventListener('click', toggleMapLabels); }
+  if (pngBtn && !pngBtn.dataset.wired) { pngBtn.dataset.wired = '1'; pngBtn.addEventListener('click', downloadMapAsPNG); }
+  if (printBtn && !printBtn.dataset.wired) { printBtn.dataset.wired = '1'; printBtn.addEventListener('click', printMap); }
 }
 
 function selectRegion(regionId, openPanel) {
@@ -2557,6 +2807,25 @@ function renderAnalytics() {
   renderTopEmployeesChart();
   renderActivityChart();
   renderAnalyticsCallouts();
+  wireAnalyticsDownloadButtons();
+}
+
+function wireAnalyticsDownloadButtons() {
+  var map = {
+    'btn-dl-region-bar': ['regionBar', 'Productivity by Region'],
+    'btn-dl-tier-donut': ['tierDonut', 'Performance Distribution'],
+    'btn-dl-top-employees': ['topEmployees', 'Top Employees'],
+    'btn-dl-activity': ['activity', 'Activity Volume by Region']
+  };
+  Object.keys(map).forEach(function(btnId) {
+    var btn = document.getElementById(btnId);
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', function() {
+      var key = map[btnId][0], title = map[btnId][1];
+      if (State.charts[key]) downloadChartAsPNG(State.charts[key], title);
+    });
+  });
 }
 
 function renderRegionBarChart() {
@@ -2726,26 +2995,371 @@ function renderAnalyticsCallouts() {
 }
 
 /* ---------------------------------------------------------------------
+   16b. Chart Builder — customizable charts, by region or by employee
+------------------------------------------------------------------- */
+var BUILDER_METRICS = {
+  region: {
+    avgProductivityJul: 'Average Productivity (Jul)',
+    avgProductivityAvg3m: 'Average Productivity (3-Month)',
+    totalProductivityJul: 'Total Productivity (Jul)',
+    share: '% Share of Total Productivity',
+    employeeCount: 'Employee Count',
+    totalVisits: 'Total Visits',
+    totalTasks: 'Total Tasks',
+    totalProjects: 'Total Projects'
+  },
+  employee: {
+    productivity: 'Productivity (Overall)',
+    productivityJul: 'Productivity (Jul)',
+    productivityAvg3m: 'Productivity (3-Month Avg)',
+    visits: 'Visits',
+    completedTasks: 'Completed Tasks',
+    projects: 'Projects',
+    performanceScore: 'Performance Score'
+  }
+};
+
+function builderMetricLabel(groupBy, key) {
+  return (BUILDER_METRICS[groupBy] && BUILDER_METRICS[groupBy][key]) || key;
+}
+
+function builderRegionMetricValue(regionId, key) {
+  if (key === 'share') return regionProductivityShare(regionId);
+  var s = computeRegionStats(regionId);
+  return Number(s[key]) || 0;
+}
+
+function builderEmployeeMetricValue(emp, key) {
+  if (key === 'productivityJul') return emp.productivityJul || emp.productivity || 0;
+  if (key === 'productivityAvg3m') return emp.productivityAvg3m || emp.productivity || 0;
+  return Number(emp[key]) || 0;
+}
+
+// Builds { labels, datasets, chartJsType, indexAxis } for a builder
+// config. Shared by the live preview and every saved chart card.
+function buildChartDataFromConfig(cfg) {
+  var isPie = cfg.type === 'pie' || cfg.type === 'doughnut';
+  var chartJsType = (cfg.type === 'horizontalBar') ? 'bar' : cfg.type;
+  var indexAxis = (cfg.type === 'horizontalBar') ? 'y' : 'x';
+
+  var rows;
+  if (cfg.groupBy === 'region') {
+    var regions = cfg.regionFilter ? State.regions.filter(function(r) { return r.id === cfg.regionFilter; }) : State.regions.slice();
+    rows = regions.map(function(r) {
+      return {
+        label: regionName(r.id),
+        value: builderRegionMetricValue(r.id, cfg.metric),
+        compareValue: cfg.compare ? builderRegionMetricValue(r.id, cfg.compare) : null,
+        color: colorForRegion(r.id)
+      };
+    });
+  } else {
+    var emps = cfg.regionFilter ? State.employees.filter(function(e) { return e.regionId === cfg.regionFilter; }) : State.employees.slice();
+    rows = emps.map(function(e) {
+      return {
+        label: e.name,
+        value: builderEmployeeMetricValue(e, cfg.metric),
+        compareValue: cfg.compare ? builderEmployeeMetricValue(e, cfg.compare) : null,
+        color: colorForProductivity(e.productivityJul || e.productivity || 0)
+      };
+    });
+  }
+
+  rows.sort(function(a, b) { return b.value - a.value; });
+  if (cfg.limit && cfg.limit > 0) rows = rows.slice(0, cfg.limit);
+
+  var datasets = [{
+    label: builderMetricLabel(cfg.groupBy, cfg.metric),
+    data: rows.map(function(r) { return Math.round(r.value * 100) / 100; }),
+    backgroundColor: isPie ? rows.map(function(r) { return r.color; }) : (cfg.compare ? '#132036' : rows.map(function(r) { return r.color; })),
+    borderRadius: isPie ? 0 : 4,
+    borderWidth: isPie ? 2 : 0,
+    borderColor: '#fff'
+  }];
+
+  if (cfg.compare && !isPie) {
+    datasets.push({
+      label: builderMetricLabel(cfg.groupBy, cfg.compare),
+      data: rows.map(function(r) { return Math.round((r.compareValue || 0) * 100) / 100; }),
+      backgroundColor: '#b3894f',
+      borderRadius: 4
+    });
+  }
+
+  return {
+    labels: rows.map(function(r) { return String(r.label).slice(0, 18); }),
+    datasets: datasets,
+    chartJsType: chartJsType,
+    indexAxis: indexAxis,
+    isPie: isPie
+  };
+}
+
+function builderTitle(cfg) {
+  var base = builderMetricLabel(cfg.groupBy, cfg.metric) + (cfg.compare ? ' vs ' + builderMetricLabel(cfg.groupBy, cfg.compare) : '');
+  var scope = cfg.groupBy === 'region' ? 'by Region' : 'by Employee';
+  var filterSuffix = cfg.regionFilter ? ' — ' + regionName(cfg.regionFilter) : '';
+  return base + ' ' + scope + filterSuffix;
+}
+
+function renderChartOnCanvas(canvasId, chartKey, cfg) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas || typeof Chart === 'undefined') return null;
+  if (State.charts[chartKey]) { State.charts[chartKey].destroy(); }
+  var built = buildChartDataFromConfig(cfg);
+  var showLabels = !!cfg.showLabels && typeof ChartDataLabels !== 'undefined';
+  var chart = new Chart(canvas.getContext('2d'), {
+    type: built.chartJsType,
+    data: { labels: built.labels, datasets: built.datasets },
+    options: {
+      indexAxis: built.indexAxis,
+      responsive: true,
+      maintainAspectRatio: true,
+      devicePixelRatio: 2,
+      plugins: {
+        legend: { display: built.isPie || cfg.compare, position: built.isPie ? 'bottom' : 'top', labels: { font: { size: 10 } } },
+        title: { display: false },
+        // Prints each bar/slice's actual value on the chart itself, so a
+        // downloaded PNG carries real data, not just an unlabeled picture.
+        datalabels: showLabels ? {
+          display: true,
+          color: built.isPie ? '#ffffff' : '#101a2e',
+          anchor: built.isPie ? 'center' : (built.indexAxis === 'y' ? 'end' : 'end'),
+          align: built.isPie ? 'center' : (built.indexAxis === 'y' ? 'end' : 'top'),
+          offset: built.isPie ? 0 : 2,
+          font: { size: 10, weight: '600' },
+          formatter: function(value) { return fmtProd(value); }
+        } : { display: false }
+      },
+      scales: built.isPie ? {} : {
+        x: { ticks: { font: { size: 9 } }, beginAtZero: cfg.type !== 'horizontalBar' },
+        y: { ticks: { font: { size: 9 } }, beginAtZero: true }
+      }
+    }
+  });
+  State.charts[chartKey] = chart;
+  return chart;
+}
+
+function currentBuilderConfig() {
+  var groupBy = document.getElementById('cb-groupby').value;
+  return {
+    groupBy: groupBy,
+    metric: document.getElementById('cb-metric').value,
+    compare: document.getElementById('cb-compare').value,
+    type: document.getElementById('cb-type').value,
+    regionFilter: document.getElementById('cb-region-filter').value,
+    limit: parseInt(document.getElementById('cb-limit').value) || 0,
+    showLabels: document.getElementById('cb-show-labels').checked
+  };
+}
+
+function populateBuilderMetricSelects() {
+  var groupBy = document.getElementById('cb-groupby').value;
+  var metrics = BUILDER_METRICS[groupBy];
+  var metricSel = document.getElementById('cb-metric');
+  var compareSel = document.getElementById('cb-compare');
+  var currentMetric = metricSel.value;
+  var currentCompare = compareSel.value;
+
+  metricSel.innerHTML = Object.keys(metrics).map(function(k) {
+    return '<option value="' + k + '">' + metrics[k] + '</option>';
+  }).join('');
+  compareSel.innerHTML = '<option value="">— None —</option>' + Object.keys(metrics).map(function(k) {
+    return '<option value="' + k + '">' + metrics[k] + '</option>';
+  }).join('');
+
+  if (metrics[currentMetric]) metricSel.value = currentMetric;
+  if (metrics[currentCompare]) compareSel.value = currentCompare;
+
+  // "Show top" only makes sense when there's a long list to shorten.
+  document.getElementById('cb-limit-row').style.display = groupBy === 'employee' ? '' : 'none';
+}
+
+function populateBuilderRegionFilter() {
+  var sel = document.getElementById('cb-region-filter');
+  var current = sel.value;
+  sel.innerHTML = '<option value="">All Regions</option>' + State.regions.map(function(r) {
+    return '<option value="' + r.id + '">' + r.name + '</option>';
+  }).join('');
+  sel.value = current;
+}
+
+function renderBuilderPreview() {
+  if (typeof Chart === 'undefined') return;
+  var cfg = currentBuilderConfig();
+  document.getElementById('cb-preview-sub').textContent = builderTitle(cfg);
+  renderChartOnCanvas('cb-preview-canvas', 'builderPreview', cfg);
+}
+
+function renderBuilder() {
+  if (State.currentView !== 'builder') return;
+  populateBuilderMetricSelects();
+  populateBuilderRegionFilter();
+  renderBuilderPreview();
+  renderSavedCustomCharts();
+}
+
+function renderSavedCustomCharts() {
+  var wrap = document.getElementById('cb-saved-charts');
+  if (!State.customCharts.length) {
+    wrap.innerHTML = '<div class="chart-card" style="grid-column:1/-1;text-align:center;color:var(--ink-faint);padding:30px;">No saved charts yet — build one above and click "+ Add Chart".</div>';
+    return;
+  }
+  wrap.innerHTML = State.customCharts.map(function(c) {
+    return '<div class="chart-card">' +
+      '<div class="chart-card-head">' +
+        '<div>' +
+          '<h3>' + builderTitle(c) + '</h3>' +
+          '<div class="sub">' + (c.groupBy === 'region' ? 'By region' : 'By employee') + '</div>' +
+        '</div>' +
+        '<div class="chart-card-actions">' +
+          '<button class="icon-btn btn-chart-download" data-id="' + c.id + '" title="Download PNG">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>' +
+          '</button>' +
+          '<button class="icon-btn btn-chart-remove" data-id="' + c.id + '" title="Remove">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      '<canvas id="cb-canvas-' + c.id + '"></canvas>' +
+    '</div>';
+  }).join('');
+
+  State.customCharts.forEach(function(c) {
+    renderChartOnCanvas('cb-canvas-' + c.id, 'custom_' + c.id, c);
+  });
+
+  wrap.querySelectorAll('.btn-chart-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.dataset.id;
+      if (State.charts['custom_' + id]) { State.charts['custom_' + id].destroy(); delete State.charts['custom_' + id]; }
+      State.customCharts = State.customCharts.filter(function(c) { return c.id !== id; });
+      DataStore.set(KEYS.customCharts, State.customCharts);
+      renderSavedCustomCharts();
+      showToast('Chart removed.', 'ok');
+    });
+  });
+
+  wrap.querySelectorAll('.btn-chart-download').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.dataset.id;
+      var cfg = State.customCharts.find(function(c) { return c.id === id; });
+      var chart = State.charts['custom_' + id];
+      if (chart && cfg) downloadChartAsPNG(chart, builderTitle(cfg));
+    });
+  });
+}
+
+function wireBuilderControls() {
+  document.getElementById('cb-groupby').addEventListener('change', function() {
+    populateBuilderMetricSelects();
+    renderBuilderPreview();
+  });
+  ['cb-metric', 'cb-compare', 'cb-type', 'cb-region-filter', 'cb-limit', 'cb-show-labels'].forEach(function(id) {
+    document.getElementById(id).addEventListener('change', renderBuilderPreview);
+  });
+  document.getElementById('cb-add').addEventListener('click', function() {
+    var cfg = currentBuilderConfig();
+    cfg.id = 'chart_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    State.customCharts.push(cfg);
+    DataStore.set(KEYS.customCharts, State.customCharts);
+    renderSavedCustomCharts();
+    showToast('Chart added below.', 'ok');
+  });
+}
+
+// Downloads a Chart.js instance as a PNG, with a clean white header
+// (title + "CPV Arabia" + date) composited above it — ready to drop
+// straight into a Word or PowerPoint report.
+function downloadChartAsPNG(chart, title) {
+  try {
+    var srcCanvas = chart.canvas;
+    var headerH = 56;
+    var pad = 16;
+    var out = document.createElement('canvas');
+    var scale = 2;
+    out.width = (srcCanvas.width) + pad * 2 * scale;
+    out.height = srcCanvas.height + (headerH + pad * 2) * scale;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+
+    ctx.fillStyle = '#132036';
+    ctx.font = '700 ' + (18 * scale) + 'px Arial, sans-serif';
+    ctx.fillText(title, pad * scale, 30 * scale);
+
+    ctx.fillStyle = '#8592a6';
+    ctx.font = (12 * scale) + 'px Arial, sans-serif';
+    var dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    ctx.fillText((State.settings.companyName || 'CPV Arabia') + ' · ' + dateStr, pad * scale, 48 * scale);
+
+    ctx.drawImage(srcCanvas, pad * scale, (headerH + pad) * scale, srcCanvas.width, srcCanvas.height);
+
+    var link = document.createElement('a');
+    link.download = title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.png';
+    link.href = out.toDataURL('image/png', 1.0);
+    link.click();
+    showToast('Chart downloaded.', 'ok');
+  } catch (e) {
+    console.warn('Chart PNG export failed:', e);
+    showToast('Could not export chart image.', 'err');
+  }
+}
+
+/* ---------------------------------------------------------------------
    17. Admin — Regions
 ------------------------------------------------------------------- */
 function renderRegionAdmin() {
   var container = document.getElementById('region-admin-list');
   container.innerHTML = State.regions.map(function(r) {
-    var autoColor = colorForProductivity(computeRegionStats(r.id).avgProductivityJul);
+    var stats = computeRegionStats(r.id);
+    var autoColor = colorForProductivity(stats.avgProductivityJul);
     var pickerColor = r.color || autoColor;
-    return '<div class="region-admin-row" data-id="' + r.id + '">' +
+    var agg = State.regionAggregates[r.id] || {};
+    var manualBadge = stats.isManual ? '<span class="manual-data-badge" title="This region has no employee records — showing manually entered totals">Manual data</span>' : '';
+    var hasGeometry = State.geojson.features.some(function(f) { return f.properties.id === r.id; });
+    return '<div class="region-admin-row-wrap">' +
+      '<div class="region-admin-row" data-id="' + r.id + '">' +
       '<input type="color" class="region-color-input" title="Map color for this region" ' +
         'value="' + pickerColor + '" data-field="color" data-id="' + r.id + '">' +
       '<div class="rid">' + r.id + '</div>' +
       '<input type="text" value="' + r.name + '" data-field="name" data-id="' + r.id + '" placeholder="Region name">' +
       '<input type="text" value="' + (r.description || '') + '" data-field="description" data-id="' + r.id + '" placeholder="Description (optional)" style="font-size:11px;flex:1;min-width:120px;">' +
+      manualBadge +
+      '<span style="font-size:11px;color:var(--ink-faint);">' + stats.employeeCount + ' employees</span>' +
+      '<button type="button" class="btn btn-ghost btn-sm btn-toggle-totals" data-id="' + r.id + '">Totals</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm btn-toggle-hidden" data-id="' + r.id + '" title="' + (r.hidden ? 'Show this region on the map again' : 'Keep the region and its data, just hide the shape from the map') + '">' + (r.hidden ? 'Show on map' : 'Hide from map') + '</button>' +
+      (hasGeometry
+        ? '<button type="button" class="btn btn-danger btn-sm btn-delete-boundary" data-id="' + r.id + '" title="Remove this region\'s shape from the map (region and employees are kept)">Delete boundary</button>'
+        : '') +
       (r.color
         ? '<button type="button" class="btn-reset-color" data-id="' + r.id + '" title="Use automatic productivity color">Reset color</button>'
         : '') +
+      '</div>' +
+      '<div class="region-totals-form hidden" id="totals-form-' + r.id + '">' +
+        '<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 8px;">Used only while this region has no individual employee records — enter aggregate numbers directly (e.g. from a report that only breaks data down by region).</p>' +
+        '<div class="form-grid">' +
+          '<div class="form-row"><label>Employee Count</label><input type="number" min="0" class="rt-input" data-field="employeeCount" data-id="' + r.id + '" value="' + (agg.employeeCount != null ? agg.employeeCount : '') + '"></div>' +
+          '<div class="form-row"><label>Avg Productivity (Jul)</label><input type="number" step="any" class="rt-input" data-field="avgProductivityJul" data-id="' + r.id + '" value="' + (agg.avgProductivityJul != null ? agg.avgProductivityJul : '') + '"></div>' +
+        '</div>' +
+        '<div class="form-grid">' +
+          '<div class="form-row"><label>3-Month Avg</label><input type="number" step="any" class="rt-input" data-field="avgProductivityAvg3m" data-id="' + r.id + '" value="' + (agg.avgProductivityAvg3m != null ? agg.avgProductivityAvg3m : '') + '"></div>' +
+          '<div class="form-row"><label>Total Visits</label><input type="number" min="0" class="rt-input" data-field="totalVisits" data-id="' + r.id + '" value="' + (agg.totalVisits != null ? agg.totalVisits : '') + '"></div>' +
+        '</div>' +
+        '<div class="form-grid">' +
+          '<div class="form-row"><label>Total Tasks</label><input type="number" min="0" class="rt-input" data-field="totalTasks" data-id="' + r.id + '" value="' + (agg.totalTasks != null ? agg.totalTasks : '') + '"></div>' +
+          '<div class="form-row"><label>Total Projects</label><input type="number" min="0" class="rt-input" data-field="totalProjects" data-id="' + r.id + '" value="' + (agg.totalProjects != null ? agg.totalProjects : '') + '"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button type="button" class="btn btn-sand btn-sm btn-save-totals" data-id="' + r.id + '">Save Totals</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm btn-clear-totals" data-id="' + r.id + '">Clear</button>' +
+        '</div>' +
+      '</div>' +
     '</div>';
   }).join('');
 
-  container.querySelectorAll('input[data-field]').forEach(function(input) {
+  container.querySelectorAll('input[data-field]:not(.rt-input)').forEach(function(input) {
     var eventName = input.dataset.field === 'color' ? 'input' : 'change';
     input.addEventListener(eventName, function() {
       var region = State.regions.find(function(r) { return r.id === input.dataset.id; });
@@ -2769,6 +3383,170 @@ function renderRegionAdmin() {
         showToast('Region color reset to automatic.', 'ok');
       }
     });
+  });
+
+  container.querySelectorAll('.btn-toggle-hidden').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var region = State.regions.find(function(r) { return r.id === btn.dataset.id; });
+      if (!region) return;
+      region.hidden = !region.hidden;
+      DataStore.set(KEYS.regions, State.regions);
+      buildGeoLayer();
+      renderRegionAdmin();
+      renderAll();
+      showToast(region.hidden ? regionName(region.id) + ' hidden from the map.' : regionName(region.id) + ' is visible on the map again.', 'ok');
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-boundary').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var rid = btn.dataset.id;
+      if (!confirm('Delete the map shape for ' + regionName(rid) + '? The region and its employees are kept — only the boundary on the map is removed. You can bring it back later by re-importing a KML that includes it.')) return;
+      State.geojson = {
+        type: 'FeatureCollection',
+        features: State.geojson.features.filter(function(f) { return f.properties.id !== rid; })
+      };
+      delete State.boundaryEdits[rid];
+      DataStore.set(KEYS.geojson, State.geojson);
+      DataStore.set(KEYS.boundaryEdits, State.boundaryEdits);
+      buildGeoLayer();
+      renderRegionAdmin();
+      renderAll();
+      showToast('Boundary deleted for ' + regionName(rid) + '.', 'ok');
+    });
+  });
+
+  container.querySelectorAll('.btn-toggle-totals').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var form = document.getElementById('totals-form-' + btn.dataset.id);
+      if (form) form.classList.toggle('hidden');
+    });
+  });
+
+  container.querySelectorAll('.btn-save-totals').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var rid = btn.dataset.id;
+      var entry = {};
+      container.querySelectorAll('.rt-input[data-id="' + rid + '"]').forEach(function(input) {
+        if (input.value !== '') entry[input.dataset.field] = parseFloat(input.value);
+      });
+      State.regionAggregates[rid] = entry;
+      DataStore.set(KEYS.regionAggregates, State.regionAggregates);
+      renderAll();
+      showToast('Region totals saved.', 'ok');
+    });
+  });
+
+  container.querySelectorAll('.btn-clear-totals').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var rid = btn.dataset.id;
+      delete State.regionAggregates[rid];
+      DataStore.set(KEYS.regionAggregates, State.regionAggregates);
+      renderAll();
+      showToast('Manual totals cleared.', 'ok');
+    });
+  });
+}
+
+/* ---------------------------------------------------------------------
+   17b. Admin — Branding (company name + logo)
+------------------------------------------------------------------- */
+function renderBrandingSettings() {
+  var nameInput = document.getElementById('branding-company-name');
+  if (!nameInput) return;
+  if (document.activeElement !== nameInput) nameInput.value = State.settings.companyName || '';
+
+  var preview = document.getElementById('branding-logo-preview');
+  var empty = document.getElementById('branding-logo-empty');
+  if (State.settings.logoDataUrl) {
+    preview.src = State.settings.logoDataUrl;
+    preview.classList.remove('hidden');
+    empty.classList.add('hidden');
+  } else {
+    preview.classList.add('hidden');
+    empty.classList.remove('hidden');
+  }
+}
+
+// Puts the saved logo (if any) in the topbar, next to the page title —
+// runs on every renderAll() so it stays in sync after a save.
+function applyBrandingToTopbar() {
+  var img = document.getElementById('topbar-logo');
+  if (!img) return;
+  if (State.settings.logoDataUrl) {
+    img.src = State.settings.logoDataUrl;
+    img.classList.remove('hidden');
+  } else {
+    img.removeAttribute('src');
+    img.classList.add('hidden');
+  }
+}
+
+// Downscales an uploaded logo to a sane max size before base64-encoding
+// it, so it stays well under the backend's per-write payload limit and
+// doesn't bloat every future sync. Keeps the source format when it's
+// already a small PNG/SVG-rendered raster; otherwise re-encodes as PNG.
+function resizeImageToDataURL(file, maxDim, callback) {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var img = new Image();
+    img.onload = function() {
+      var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/png', 0.92));
+    };
+    img.onerror = function() { callback(null); };
+    img.src = ev.target.result;
+  };
+  reader.onerror = function() { callback(null); };
+  reader.readAsDataURL(file);
+}
+
+function wireBrandingSettings() {
+  var pickBtn = document.getElementById('btn-branding-logo-pick');
+  var fileInput = document.getElementById('branding-logo-input');
+  var removeBtn = document.getElementById('btn-branding-logo-remove');
+  var saveBtn = document.getElementById('btn-save-branding');
+  if (!pickBtn) return;
+
+  pickBtn.addEventListener('click', function() { fileInput.click(); });
+
+  fileInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      showToast('Please choose an image file for the logo.', 'err');
+      e.target.value = '';
+      return;
+    }
+    resizeImageToDataURL(file, 240, function(dataUrl) {
+      if (!dataUrl) {
+        showToast('Could not read that image — try a different file.', 'err');
+        return;
+      }
+      State.settings.logoDataUrl = dataUrl;
+      renderBrandingSettings();
+      showToast('Logo ready — click "Save Branding" to apply it.', 'ok');
+    });
+    e.target.value = '';
+  });
+
+  removeBtn.addEventListener('click', function() {
+    State.settings.logoDataUrl = '';
+    renderBrandingSettings();
+  });
+
+  saveBtn.addEventListener('click', function() {
+    State.settings.companyName = document.getElementById('branding-company-name').value.trim() || 'CPV Arabia';
+    DataStore.set(KEYS.settings, State.settings);
+    renderAll();
+    showToast('Branding saved.', 'ok');
   });
 }
 
@@ -2981,7 +3759,8 @@ var IMPORT_HEADER_SYNONYMS = {
   visits: ['visits', 'totalvisits', 'الزيارات', 'زيارات'],
   completedTasks: ['completedtasks', 'tasks', 'tasksdone', 'المهام', 'مهام', 'المهامالمنجزة', 'المهامالمنجزه'],
   projects: ['projects', 'activeprojects', 'المشاريع', 'مشاريع'],
-  joinDate: ['joindate', 'startdate', 'datejoined', 'تاريخالانضمام', 'تاريخالتعيين']
+  joinDate: ['joindate', 'startdate', 'datejoined', 'تاريخالانضمام', 'تاريخالتعيين'],
+  employeeCount: ['employeecount', 'headcount', 'numemployees', 'numberofemployees', 'عددالموظفين', 'عددالعاملين', 'عددالموظفين']
 };
 
 // Strip spaces/punctuation but keep letters of any script (Arabic
@@ -3041,29 +3820,61 @@ function buildImportCandidate(row, regionByLower) {
 // any candidate's name matches an existing employee (case/space-
 // insensitive), pauses to ask whether to replace or skip those rows
 // before writing anything — matched purely by employee name, per the
-// person's request.
+// person's request. Rows with a region but no name are treated as
+// region-only aggregate totals instead of employee records.
 function importEmployeeRows(rawRows) {
-  var mapped = rawRows.map(mapImportRow).filter(function(row) { return row.name && row.regionId; });
+  var mapped = rawRows.map(mapImportRow).filter(function(row) { return row.regionId; });
   if (!mapped.length) {
-    showToast('No valid employee rows found. Make sure the file has name and region columns.', 'err');
+    showToast('No valid rows found. Make sure the file has at least a region column.', 'err');
     return;
   }
 
-  // Match region names against known regions (case-insensitive) so a
-  // spreadsheet using display names still lines up with region IDs.
   var regionByLower = {};
   State.regions.forEach(function(r) { regionByLower[String(r.id).toLowerCase().trim()] = r.id; regionByLower[String(r.name).toLowerCase().trim()] = r.id; });
 
+  var employeeRows = mapped.filter(function(row) { return row.name && String(row.name).trim(); });
+  var aggregateRows = mapped.filter(function(row) { return !row.name || !String(row.name).trim(); });
+
+  var aggregateApplied = 0, aggregateSkipped = 0;
+  aggregateRows.forEach(function(row) {
+    var regionKey = String(row.regionId).toLowerCase().trim();
+    var regionId = regionByLower[regionKey];
+    if (!regionId) { aggregateSkipped++; return; }
+    var entry = {};
+    if (row.employeeCount !== undefined) entry.employeeCount = parseFloat(row.employeeCount) || 0;
+    var jul = parseFloat(row.productivityJul);
+    var overall = parseFloat(row.productivity);
+    var julVal = !isNaN(jul) ? jul : (!isNaN(overall) ? overall : undefined);
+    if (julVal !== undefined) entry.avgProductivityJul = julVal;
+    var avg3m = parseFloat(row.productivityAvg3m);
+    if (!isNaN(avg3m)) entry.avgProductivityAvg3m = avg3m;
+    if (row.visits !== undefined) entry.totalVisits = parseFloat(row.visits) || 0;
+    if (row.completedTasks !== undefined) entry.totalTasks = parseFloat(row.completedTasks) || 0;
+    if (row.projects !== undefined) entry.totalProjects = parseFloat(row.projects) || 0;
+    if (!Object.keys(entry).length) { aggregateSkipped++; return; }
+    State.regionAggregates[regionId] = Object.assign({}, State.regionAggregates[regionId] || {}, entry);
+    aggregateApplied++;
+  });
+  if (aggregateApplied) DataStore.set(KEYS.regionAggregates, State.regionAggregates);
+
+  if (!employeeRows.length) {
+    renderAll();
+    if (aggregateApplied) showToast('Region totals updated for ' + aggregateApplied + ' region(s)' + (aggregateSkipped ? ', ' + aggregateSkipped + ' skipped (unknown region)' : '') + '.', 'ok');
+    else showToast('No valid rows imported — check region names match known regions.', 'err');
+    return;
+  }
+
   var candidates = [];
   var skippedRegion = 0;
-  mapped.forEach(function(row) {
+  employeeRows.forEach(function(row) {
     var c = buildImportCandidate(row, regionByLower);
     if (!c) { skippedRegion++; return; }
     candidates.push(c);
   });
 
   if (!candidates.length) {
-    showToast('No rows imported — region names didn\'t match any known region.', 'err');
+    if (aggregateApplied) showToast('Region totals updated for ' + aggregateApplied + ' region(s). No employee rows matched a known region.', 'ok');
+    else showToast('No rows imported — region names didn\'t match any known region.', 'err');
     return;
   }
 
@@ -3075,18 +3886,18 @@ function importEmployeeRows(rawRows) {
   });
 
   if (duplicateNames.length) {
-    State.pendingImport = { candidates: candidates, skippedRegion: skippedRegion };
+    State.pendingImport = { candidates: candidates, skippedRegion: skippedRegion, aggregateApplied: aggregateApplied };
     openImportDuplicateModal(duplicateNames);
     return;
   }
 
-  applyImportedRows(candidates, 'skip', skippedRegion);
+  applyImportedRows(candidates, 'skip', skippedRegion, aggregateApplied);
 }
 
 // Writes candidates to State.employees. duplicateAction is 'replace'
 // (overwrite the existing employee's data, keeping their id) or 'skip'
 // (leave the existing employee untouched, only add genuinely new names).
-function applyImportedRows(candidates, duplicateAction, skippedRegion) {
+function applyImportedRows(candidates, duplicateAction, skippedRegion, aggregateApplied) {
   var existingByLower = {};
   State.employees.forEach(function(e) { existingByLower[e.name.toLowerCase().trim()] = e; });
 
@@ -3127,6 +3938,7 @@ function applyImportedRows(candidates, duplicateAction, skippedRegion) {
   if (replaced) parts.push(replaced + ' replaced');
   if (skippedDup) parts.push(skippedDup + ' skipped (duplicate)');
   if (skippedRegion) parts.push(skippedRegion + ' skipped (unknown region)');
+  if (aggregateApplied) parts.push(aggregateApplied + ' region total(s) updated');
   if (parts.length) showToast('Import complete — ' + parts.join(' · ') + '.', 'ok');
   else showToast('Nothing imported.', 'err');
 }
@@ -3153,12 +3965,12 @@ function wireImportDuplicateModal() {
     showToast('تم إلغاء الاستيراد.', 'err');
   });
   document.getElementById('import-dup-skip').addEventListener('click', function() {
-    if (State.pendingImport) applyImportedRows(State.pendingImport.candidates, 'skip', State.pendingImport.skippedRegion);
+    if (State.pendingImport) applyImportedRows(State.pendingImport.candidates, 'skip', State.pendingImport.skippedRegion, State.pendingImport.aggregateApplied);
     State.pendingImport = null;
     close();
   });
   document.getElementById('import-dup-replace').addEventListener('click', function() {
-    if (State.pendingImport) applyImportedRows(State.pendingImport.candidates, 'replace', State.pendingImport.skippedRegion);
+    if (State.pendingImport) applyImportedRows(State.pendingImport.candidates, 'replace', State.pendingImport.skippedRegion, State.pendingImport.aggregateApplied);
     State.pendingImport = null;
     close();
   });
@@ -3194,7 +4006,15 @@ function wireAdminImports() {
           });
           DataStore.set(KEYS.geojson, State.geojson);
           DataStore.set(KEYS.regions, State.regions);
-          initMap();
+          // Rebuild just the region layer on the existing map instance.
+          // Calling initMap() here used to re-run L.map('map', ...) on a
+          // container that already had a live Leaflet map attached,
+          // which throws "Map container is already initialized".
+          if (State.map) {
+            buildGeoLayer();
+          } else {
+            initMap();
+          }
           renderAll();
           showToast('KML loaded successfully. ' + State.regions.length + ' regions found.', 'ok');
         } else {
@@ -3299,6 +4119,7 @@ function wireAdmin() {
   wireThresholdSettings();
   wireVisibilityControls();
   wireLabelSettings();
+  wireBrandingSettings();
   wireAdminImports();
   wireAdminReset();
 }
